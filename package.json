@@ -1,0 +1,17 @@
+{
+  "name": "corvo-agent-mobile",
+  "version": "1.0.0",
+  "description": "Corvo Agent Autonomous Mobile WhatsApp Bot",
+  "main": "ia_agent.js",
+  "scripts": {
+    "start": "node ia_agent.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "jimp": "^1.6.0",
+    "sharp": "^0.33.5"
+  }
+}

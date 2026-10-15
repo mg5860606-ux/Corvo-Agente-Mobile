@@ -1,0 +1,45 @@
+  {
+    name: 'termux_executar_comando',
+    description: 'Executa qualquer comando de terminal/shell no Android (Termux). Use para rodar comandos de sistema, instalar pacotes pkg, manipular arquivos, rodar scripts, gerenciar processos, etc. Retorna o output (stdout/stderr).',
+    parameters: {
+      type: 'object',
+      properties: {
+        comando: {
+          type: 'string',
+          description: 'Comando de shell para executar (ex: pkg install nmap, ls -la /sdcard, python script.py)'
+        }
+      },
+      required: ['comando']
+    }
+  },
+  {
+    name: 'termux_gerenciar_arquivo',
+    description: 'Cria, lê, edita, sobrescreve ou apaga arquivos e pastas no sistema de arquivos do Android (Termux / Armazenamento interno). Ações permitidas: ler, escrever, apagar, listar.',
+    parameters: {
+      type: 'object',
+      properties: {
+        acao: {
+          type: 'string',
+          enum: ['ler', 'escrever', 'apagar', 'listar'],
+          description: 'Ação a executar no arquivo/pasta'
+        },
+        caminho: {
+          type: 'string',
+          description: 'Caminho absoluto ou relativo do arquivo/pasta (ex: /sdcard/Download/teste.txt)'
+        },
+        conteudo: {
+          type: 'string',
+          description: 'Conteúdo a ser escrito no arquivo (obrigatório se acao=escrever)'
+        }
+      },
+      required: ['acao', 'caminho']
+    }
+  },
+  {
+    name: 'termux_info_sistema',
+    description: 'Retorna informações completas sobre o estado do dispositivo Android (bateria, armazenamento livre, memória RAM, processos ativos e rede).',
+    parameters: {
+      type: 'object',
+      properties: {}
+    }
+  }
