@@ -1,5 +1,5 @@
 /**
- * 🗄️ CORVO OPENCLAW MOBILE - PERSISTÊNCIA SQLITE (ATUALIZADO COM OFFLINE QUEUE)
+ * 🗄️ CORVO AGENTE MOBILE - PERSISTÊNCIA SQLITE (ATUALIZADO COM OFFLINE QUEUE)
  * Gerencia histórico de conversas, estado de subagentes e fila de mensagens pendentes sem internet.
  */
 
@@ -7,7 +7,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const DATA_DIR = path.resolve(__dirname, 'data');
+const DATA_DIR = path.resolve(__dirname, '../../data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const dbPath = path.join(DATA_DIR, 'corvo_mobile.db');

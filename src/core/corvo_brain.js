@@ -7,7 +7,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const BRAIN_DIR = path.resolve(__dirname, 'brain');
+const BRAIN_DIR = path.resolve(__dirname, '../../brain');
 if (!fs.existsSync(BRAIN_DIR)) fs.mkdirSync(BRAIN_DIR, { recursive: true });
 
 const dbPath = path.join(BRAIN_DIR, 'neural_memory.db');

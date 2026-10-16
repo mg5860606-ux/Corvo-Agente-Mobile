@@ -2,15 +2,15 @@
 /**
  * 🦅 CORVO AGENTE MOBILE - MASTER LAUNCHER
  * Inicia o Gateway Daemon HTTP e o Cliente WhatsApp simultaneamente
- * com Watchdog de auto-recuperação (Anti-Crash).
+ * apontando para a nova estrutura de pastas (src/core e src/channels).
  */
 
 const { spawn } = require('child_process');
 const path = require('path');
 
-function runService(scriptName) {
-  const scriptPath = path.join(__dirname, scriptName);
-  console.log(`[MASTER] Iniciando serviço: ${scriptName}...`);
+function runService(relativePath) {
+  const scriptPath = path.join(__dirname, relativePath);
+  console.log(`[MASTER] Iniciando serviço: ${relativePath}...`);
 
   const child = spawn('node', [scriptPath], {
     stdio: 'inherit',
@@ -19,14 +19,14 @@ function runService(scriptName) {
   });
 
   child.on('close', (code) => {
-    console.warn(`[WATCHDOG] O serviço ${scriptName} parou com código ${code}. Reiniciando em 5 segundos...`);
+    console.warn(`[WATCHDOG] O serviço ${relativePath} parou com código ${code}. Reiniciando em 5 segundos...`);
     setTimeout(() => {
-      runService(scriptName);
+      runService(relativePath);
     }, 5000);
   });
 
   child.on('error', (err) => {
-    console.error(`[WATCHDOG ERROR] Erro no processo ${scriptName}:`, err.message);
+    console.error(`[WATCHDOG ERROR] Erro no processo ${relativePath}:`, err.message);
   });
 }
 
@@ -34,12 +34,12 @@ console.clear();
 console.log('========================================');
 console.log('  🦅 CORVO AGENTE MOBILE - MASTER LAUNCHER');
 console.log('========================================');
-console.log(' Iniciando arquitetura Mini-CORVO AGENTE MOBILE...');
+console.log(' Iniciando arquitetura estruturada...');
 
-// 1. Inicia o Gateway HTTP Daemon
-runService('corvo_gateway.js');
+// 1. Inicia o Gateway HTTP Daemon (src/core/corvo_gateway.js)
+runService('src/core/corvo_gateway.js');
 
-// 2. Aguarda 3 segundos e inicia o Bot do WhatsApp
+// 2. Aguarda 3 segundos e inicia o Bot do WhatsApp (src/channels/corvo_whatsapp.js)
 setTimeout(() => {
-  runService('corvo_whatsapp.js');
+  runService('src/channels/corvo_whatsapp.js');
 }, 3000);

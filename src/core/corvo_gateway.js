@@ -2,7 +2,7 @@
  * 🦅 CORVO AGENTE MOBILE - DAEMON CORE & MOTOR DE SUBAGENTES
  * Arquitetura de Gateway central, execução assíncrona em background,
  * persistência de estado, carregamento dinâmico de skills,
- * Cérebro de Memória Episódica (corvo_brain.js) e Autonomous Loop (corvo_loop.js).
+ * Cérebro de Memória Episódica e Autonomous Loop.
  */
 
 const express = require('express');
@@ -10,19 +10,20 @@ const fs = require('fs');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('./corvo_db');
-const sensors = require('./corvo_sensors');
-const selfCoding = require('./corvo_self_coding');
-const godMode = require('./corvo_god_mode');
+const sensors = require('../modules/corvo_sensors');
+const selfCoding = require('../modules/corvo_self_coding');
+const godMode = require('../modules/corvo_god_mode');
 const brain = require('./corvo_brain');
 const autonomousLoop = require('./corvo_loop');
-require('dotenv').config();
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3333;
-const DATA_DIR = path.resolve(__dirname, 'data');
-const SKILLS_DIR = path.resolve(__dirname, 'skills');
+const ROOT_DIR = path.resolve(__dirname, '../..');
+const DATA_DIR = path.join(ROOT_DIR, 'data');
+const SKILLS_DIR = path.join(ROOT_DIR, 'skills');
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(SKILLS_DIR)) fs.mkdirSync(SKILLS_DIR, { recursive: true });
@@ -65,7 +66,7 @@ async function spawnSubagent(jobId, prompt, contextData = {}) {
     const arquivosProjeto = selfCoding.listarArquivos();
 
     const fullPrompt = `Você é o Corvo Subagente Autônomo God Mode com Cérebro Episódico.
-Contexto do sistema: Android / Termux / CORVO AGENTE MOBILE Mobile com privilégios absolutos.
+Contexto do sistema: Android / Termux / CORVO AGENTE MOBILE Mobile com privilégios absolutos sob o comando do @CORVO291.
 Arquivos do projeto disponíveis para edição: ${JSON.stringify(arquivosProjeto.files || [])}
 Skills disponíveis:\n${skillsContext}
 
@@ -90,7 +91,7 @@ Execute a tarefa com precisão absoluta utilizando o God Mode, memória episódi
   }
 }
 
-// ================= API ENDPOINTS (GATEWAY MINI-OPENCLAW) =================
+// ================= API ENDPOINTS =================
 
 app.get('/status', (req, res) => {
   res.json({
@@ -117,20 +118,15 @@ app.get('/subagent/:jobId', async (req, res) => {
   res.json(job);
 });
 
-// ================= ENDPOINTS DE AUTONOMOUS LOOP =================
-
 app.post('/mission/start', (req, res) => {
   const { objective } = req.body;
   if (!objective) return res.status(400).json({ error: 'Objetivo da missão é obrigatório' });
 
   const missionId = `mission_${Date.now()}`;
-  // Roda em background sem bloquear o HTTP
   autonomousLoop.runAutonomousMission(missionId, objective);
 
-  res.json({ success: true, missionId, message: 'Missão iniciada em Autonomous Loop contínuo. Só vai parar ao concluir.' });
+  res.json({ success: true, missionId, message: 'Missão iniciada em Autonomous Loop contínuo.' });
 });
-
-// ================= ENDPOINTS DE SENSORES (TERMUX-API) =================
 
 app.get('/sensors/gps', (req, res) => { res.json(sensors.getLocalizacao()); });
 app.post('/sensors/camera', (req, res) => { res.json(sensors.tirarFoto(req.body.camera || '0')); });
@@ -138,13 +134,9 @@ app.post('/sensors/audio', (req, res) => { res.json(sensors.gravarAudio(req.body
 app.get('/sensors/sms', (req, res) => { res.json(sensors.listarSms(req.query.limite || 5)); });
 app.get('/sensors/battery', (req, res) => { res.json(sensors.statusBateria()); });
 
-// ================= ENDPOINTS DE SELF-CODING =================
-
 app.get('/code/list', (req, res) => { res.json(selfCoding.listarArquivos()); });
 app.post('/code/read', (req, res) => { res.json(selfCoding.lerCodigo(req.body.arquivo)); });
 app.post('/code/write', (req, res) => { res.json(selfCoding.escreverCodigo(req.body.arquivo, req.body.conteudo)); });
-
-// ================= ENDPOINTS DE GOD MODE =================
 
 app.post('/god/shell', (req, res) => { res.json(godMode.executarShell(req.body.comando, req.body.root || false)); });
 app.get('/god/apps', (req, res) => { res.json(godMode.listarApps(req.query.tipo || 'all')); });
