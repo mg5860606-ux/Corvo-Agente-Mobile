@@ -13,7 +13,10 @@ const db = require('../core/corvo_db');
 const authDir = path.resolve(__dirname, '../../data', 'auth_info_baileys');
 if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
-const GATEWAY_URL = 'http://localhost:3333';
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+
+const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:3333';
+const MARCOS_PHONE = String(process.env.MARCOS_WHATSAPP_PHONE || '5511947285405');
 
 const rl = readline.createInterface({
   input: process.stdin,
