@@ -8,6 +8,6 @@ cd /data/data/com.termux/files/home/CorvoAgentMobile || cd ~/CorvoAgentMobile
 export PATH=$PATH:/data/data/com.termux/files/usr/bin
 
 # Inicia o Gateway Daemon em background registrando logs
-nohup node corvo_gateway.js > gateway.log 2>&1 &
+nohup node src/core/corvo_gateway.js > gateway.log 2>&1 &
 
 echo "[CORVO] Daemon iniciado automaticamente no boot do Android."

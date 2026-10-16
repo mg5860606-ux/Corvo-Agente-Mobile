@@ -12,7 +12,8 @@ const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const DATA_DIR = path.resolve(__dirname, 'data');
+const ROOT_DIR = path.resolve(__dirname, '../../');
+const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SENSORS_DIR = path.join(DATA_DIR, 'sensors');
 if (!fs.existsSync(SENSORS_DIR)) fs.mkdirSync(SENSORS_DIR, { recursive: true });
 

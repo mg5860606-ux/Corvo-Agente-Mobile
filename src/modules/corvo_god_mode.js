@@ -12,7 +12,8 @@ const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const DATA_DIR = path.resolve(__dirname, 'data', 'android_storage');
+const ROOT_DIR = path.resolve(__dirname, '../../');
+const DATA_DIR = path.join(ROOT_DIR, 'data', 'android_storage');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function runCommand(cmd) {

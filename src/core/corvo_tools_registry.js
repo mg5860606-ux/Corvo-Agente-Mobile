@@ -81,13 +81,33 @@ const toolsRegistry = {
     },
     execute: async ({ url }) => {
       try {
-        const enginePath = 'C:\\xereca017\\scripts\\web_recon_engine.py';
-        if (fs.existsSync(enginePath)) {
-          const out = execSync(`python "${enginePath}" --target "${url}" --depth 2`, { encoding: 'utf8', timeout: 60000 });
+        const localScript = path.resolve(ROOT_DIR, 'scripts/web_recon_engine.py');
+        if (fs.existsSync(localScript)) {
+          const out = execSync(`python "${localScript}" --target "${url}" --depth 2`, { encoding: 'utf8', timeout: 60000 });
           return { success: true, url, output: out.trim() };
-        } else {
-          return { success: false, error: 'Engine web_recon_engine.py não localizada.' };
         }
+
+        // Auditoria nativa em JavaScript caso não haja script externo
+        const response = await axios.get(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          timeout: 20000
+        });
+
+        const $ = cheerio.load(response.data);
+        const scripts = [];
+        $('script[src]').each((i, el) => {
+          const src = $(el).attr('src');
+          if (src) scripts.push(src);
+        });
+
+        return {
+          success: true,
+          url,
+          title: $('title').text().trim(),
+          scriptsDetected: scripts.slice(0, 15),
+          metaDescription: $('meta[name="description"]').attr('content') || 'Nenhuma',
+          note: 'Auditoria rápida nativa realizada. Scripts e rotas identificados.'
+        };
       } catch (err) {
         return { success: false, error: err.message, details: err.stdout };
       }

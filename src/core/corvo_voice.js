@@ -70,16 +70,11 @@ const voiceEngine = {
     // 2. Fallback Grátis Neural Ultra-Realista (Edge-TTS via Python ou CLI)
     try {
       console.log('[VOICE] Gerando via Neural TTS Grátis (Thalita/Francisca PT-BR)...');
-      // Tenta rodar script de Edge TTS
+      // Tenta rodar script local de Edge TTS
       const pyScript = path.resolve(__dirname, '../../scripts/generate_voice.py');
-      const xerecaPyScript = 'C:\\xereca017\\scripts\\generate_voice.py';
 
-      let targetScript = null;
-      if (fs.existsSync(pyScript)) targetScript = pyScript;
-      else if (fs.existsSync(xerecaPyScript)) targetScript = xerecaPyScript;
-
-      if (targetScript) {
-        execSync(`python "${targetScript}" "${cleanText.replace(/"/g, '\\"')}" "${outputPath}" "pt-BR-ThalitaMultilingualNeural"`, { timeout: 30000 });
+      if (fs.existsSync(pyScript)) {
+        execSync(`python "${pyScript}" "${cleanText.replace(/"/g, '\\"')}" "${outputPath}" "pt-BR-ThalitaMultilingualNeural"`, { timeout: 30000 });
         if (fs.existsSync(outputPath)) {
           return { success: true, filePath: outputPath, provider: 'edge-neural-free' };
         }

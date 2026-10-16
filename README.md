@@ -141,12 +141,37 @@ node corvo_whatsapp.js
 
 ---
 
-## 📲 Conexão com o WhatsApp
+## 📲 Canais de Comunicação & Acesso Total
 
-1. Ao rodar `node corvo_whatsapp.js` (ou através do `start-master.js`), você terá duas opções de autenticação:
+### 💬 WhatsApp (Baileys)
+1. Ao rodar `node src/channels/corvo_whatsapp.js` (ou através do Painel Web / `start-master.js`), você terá duas opções de autenticação:
    - **QR Code**: Escaneie o QR Code exibido diretamente no terminal com o WhatsApp do seu celular (*Dispositivos conectados > Conectar aparelho*).
    - **Code Pairing**: Digite o número do seu telefone para receber o código de 8 dígitos na central de notificações do WhatsApp.
 2. A sessão fica salva de forma segura e criptografada em `data/auth_info_baileys/`.
+
+---
+
+### ✈️ Telegram (Acesso Total ao Celular & Versão Recomendada)
+
+Para controle remoto absoluto do seu celular e do Corvo Agente via Telegram sem restrições de permissões do sistema Android:
+
+1. **Versão Recomendada do Telegram:**
+   - ⚠️ **NÃO utilize a versão da Google Play Store** (ela possui restrições severas de sandboxing impostas pelo Google que impedem certas automações, downloads em background e permissões de acessibilidade/arquivos).
+   - ✅ **Utilize o Telegram Direct APK Oficial (telegram.org/android)** ou o **Telegram FOSS (F-Droid)**.
+   - A versão Direct (instalada direto do site oficial do Telegram) não tem as restrições da Play Store, permitindo envio de arquivos pesados, execução contínua em background sem ser encerrada pelo sistema operacional e integração sem barreiras com o Termux:API e permissões especiais do Android.
+
+2. **Configuração do Bot do Telegram no Corvo:**
+   - Abra o Telegram e inicie uma conversa com o [@BotFather](https://t.me/BotFather).
+   - Digite `/newbot` e siga as instruções para criar seu bot e obter o seu **Token de Autenticação** (formato: `123456789:ABCdef...`).
+   - Insira o token no seu arquivo `.env`:
+     ```bash
+     TELEGRAM_BOT_TOKEN="seu_token_aqui"
+     ```
+   - O canal do Telegram pode ser ligado/desligado a qualquer momento com 1 clique direto pelo **Painel Web do Gateway** (porta 3333) ou rodando:
+     ```bash
+     node src/channels/corvo_telegram.js
+     ```
+   - O bot reconhece automaticamente o seu ID (`8273924319`) como Dono Absoluto, obedecendo ordens diretas de voz, shell e comandos do sistema com prioridade máxima.
 
 ---
 
