@@ -12,8 +12,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
 const API_URL = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : '';
-const GATEWAY_URL = 'http://localhost:3333';
-const MARCOS_TG_ID = '8273924319';
+const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:3333';
+const MARCOS_TG_ID = String(process.env.MARCOS_TELEGRAM_ID || process.env.OWNER_TELEGRAM_ID || '8273924319');
 
 let isRunning = false;
 let lastUpdateId = 0;
@@ -80,7 +80,9 @@ async function startPolling() {
             // Chama o Gateway /chat para responder
             try {
               const chatRes = await axios.post(`${GATEWAY_URL}/chat`, {
-                message: text
+                message: text,
+                sender: isDono ? 'Marcos (DONO)' : (update.message.from.first_name || 'Usuário'),
+                isDono: isDono
               });
 
               if (chatRes.data && chatRes.data.reply) {

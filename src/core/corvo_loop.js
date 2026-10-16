@@ -78,8 +78,9 @@ async function runAutonomousMission(missionId, objective, options = {}) {
     return { success: false, error: err };
   }
 
+  const activeModel = options.model || process.env.PRIMARY_MODEL || 'gemini-flash-latest';
   const model = genAI.getGenerativeModel({
-    model: 'gemini-flash-latest',
+    model: activeModel,
     generationConfig: {
       temperature: 0.2, // Raciocínio cirúrgico e focado
     }

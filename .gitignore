@@ -1,2 +1,24 @@
+# Dependências (NUNCA commitar - usar npm install para restaurar)
+node_modules/
+
+# Variáveis de ambiente com credenciais
 .env
+
+# Bancos de dados locais e dados de runtime
+data/
+brain/
+
+# Sessão de autenticação do WhatsApp (contém credenciais criptografadas)
+auth_info_baileys/
+
+# Logs e arquivos temporários
 *.log
+*.tmp
+
+# Backups de código gerados pelo self-coding
+data/code_backups/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

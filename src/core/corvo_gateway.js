@@ -26,6 +26,43 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// ================= MIDDLEWARE DE AUTENTICAÇÃO (SEGURANÇA) =================
+const GATEWAY_AUTH_TOKEN = process.env.GATEWAY_AUTH_TOKEN || '';
+
+function authMiddleware(req, res, next) {
+  // Se não há token configurado, desabilita autenticação (avisa no console)
+  if (!GATEWAY_AUTH_TOKEN) return next();
+
+  // Verifica Bearer Token no header Authorization OU query param ?token=
+  const authHeader = req.headers.authorization || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  const queryToken = req.query.token || '';
+
+  if (bearerToken === GATEWAY_AUTH_TOKEN || queryToken === GATEWAY_AUTH_TOKEN) {
+    return next();
+  }
+
+  return res.status(401).json({ error: 'Acesso negado. Token de autenticação inválido ou ausente.' });
+}
+
+// Rotas protegidas: todos os endpoints que executam ações no sistema
+const protectedPaths = [
+  '/chat', '/god/', '/sensors/', '/code/', '/tools/',
+  '/subagent/', '/mission/', '/voice/', '/whatsapp/', '/telegram/', '/model/'
+];
+
+app.use((req, res, next) => {
+  const needsAuth = protectedPaths.some(p => req.path.startsWith(p));
+  if (needsAuth && req.method !== 'GET') {
+    return authMiddleware(req, res, next);
+  }
+  // GET em /god/ e /sensors/ também precisa de auth (podem expor dados sensíveis)
+  if (needsAuth && (req.path.startsWith('/god/') || req.path.startsWith('/sensors/'))) {
+    return authMiddleware(req, res, next);
+  }
+  next();
+});
+
 const PORT = process.env.PORT || 3333;
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
@@ -437,6 +474,12 @@ app.get('/', (req, res) => {
   </div>
 
   <script>
+    const AUTH_TOKEN = '${GATEWAY_AUTH_TOKEN}';
+    function authHeaders(extra) {
+      const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+      if (AUTH_TOKEN) h['Authorization'] = 'Bearer ' + AUTH_TOKEN;
+      return h;
+    }
     let attachedFile = null;
 
     function handleFileSelected(e) {
@@ -478,7 +521,7 @@ app.get('/', (req, res) => {
 
         const res = await fetch('/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: JSON.stringify({
             message: text,
             file: base64Data ? { data: base64Data, type: fileType, name: fileName } : null
@@ -580,7 +623,7 @@ app.get('/', (req, res) => {
       try {
         const res = await fetch('/model/switch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders(),
           body: JSON.stringify({ model: modelId })
         });
         const data = await res.json();
@@ -618,7 +661,7 @@ app.get('/', (req, res) => {
       text.textContent = 'Iniciando WhatsApp...';
 
       try {
-        const res = await fetch('/whatsapp/toggle', { method: 'POST' });
+        const res = await fetch('/whatsapp/toggle', { method: 'POST', headers: authHeaders() });
         const data = await res.json();
         if (data.running) {
           btn.className = 'btn-channel wa-active';
@@ -643,7 +686,7 @@ app.get('/', (req, res) => {
       text.textContent = 'Iniciando Telegram...';
 
       try {
-        const res = await fetch('/telegram/toggle', { method: 'POST' });
+        const res = await fetch('/telegram/toggle', { method: 'POST', headers: authHeaders() });
         const data = await res.json();
         if (data.running) {
           btn.className = 'btn-channel tg-active';
@@ -741,6 +784,9 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
 
     // 2. Comandos Operacionais Diretos (Shell / Terminal / Bateria / GPS / Apps)
     if (message) {
+      // Aprendizado ativo com feedbacks do Marcos
+      brain.processFeedback(message);
+
       // Bateria
       if (/\b(bateria|status da bateria|nível de bateria)\b/i.test(message)) {
         const bat = sensors.statusBateria();
@@ -938,4 +984,11 @@ app.get('/god/screenshot', async (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[CORVO AGENTE MOBILE] Daemon Brain & Autonomous Loop rodando na porta ${PORT}.`);
+  if (!GATEWAY_AUTH_TOKEN) {
+    console.warn('\n⚠️  [SEGURANÇA] GATEWAY_AUTH_TOKEN não configurado no .env!');
+    console.warn('    Qualquer pessoa na sua rede local pode controlar o dispositivo.');
+    console.warn('    Adicione GATEWAY_AUTH_TOKEN=seu_token_seguro no .env para proteger os endpoints.\n');
+  } else {
+    console.log('[SEGURANÇA] Autenticação Bearer Token ativa. Endpoints protegidos.');
+  }
 });

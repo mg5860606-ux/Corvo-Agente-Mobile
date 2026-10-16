@@ -1,20 +1,44 @@
 {
   "name": "corvo-agent-mobile",
-  "version": "1.0.0",
-  "description": "Corvo Agent Autonomous Mobile WhatsApp Bot",
-  "main": "ia_agent.js",
+  "version": "2.0.0",
+  "description": "Corvo Agente Mobile — Autonomous Neural AI Ecosystem & Mobile Daemon with God Mode, Self-Coding & Episodic Memory",
+  "main": "start-master.js",
   "scripts": {
-    "start": "node ia_agent.js"
+    "start": "node start-master.js",
+    "gateway": "node src/core/corvo_gateway.js",
+    "telegram": "node src/channels/corvo_telegram.js",
+    "whatsapp": "node src/channels/corvo_whatsapp.js",
+    "test": "node tests/run_tests.js",
+    "lint": "node --check src/core/*.js src/modules/*.js src/channels/*.js start-master.js"
   },
+  "keywords": [
+    "ai-agent",
+    "autonomous",
+    "mobile",
+    "termux",
+    "android",
+    "gemini",
+    "telegram-bot",
+    "whatsapp-bot",
+    "self-coding",
+    "god-mode"
+  ],
+  "author": "Marcos (@CORVO291)",
+  "license": "MIT",
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "axios": "^1.7.9",
+    "cheerio": "^1.2.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "form-data": "^4.0.6",
     "jimp": "^1.6.0",
     "pino": "^9.6.0",
     "sharp": "^0.33.5",
     "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
