@@ -1,6 +1,6 @@
 <div align="center">
 
-  <img src="https://raw.githubusercontent.com/mg5860606-ux/Corvo-Agente-Mobile/main/assets/corvo_avatar.jpg" alt="Corvo Agente Mobile Avatar" width="300" style="border-radius: 50%; box-shadow: 0 0 35px rgba(0, 229, 255, 0.6); border: 2px solid #00e5ff;" />
+  <img src="https://raw.githubusercontent.com/mg5860606-ux/Corvo-Agente-Mobile/main/assets/corvo_avatar.jpg" alt="Corvo Agente Mobile Emblem" width="240" style="border-radius: 20px; box-shadow: 0 10px 40px rgba(0, 229, 255, 0.35); border: 1px solid rgba(0, 229, 255, 0.4);" />
 
   # 🦅 CORVO AGENTE MOBILE
   ### *Autonomous Neural AI Ecosystem & Mobile Daemon*

@@ -2,7 +2,7 @@
  * 🦅 CORVO AGENTE MOBILE - DAEMON CORE & MOTOR DE SUBAGENTES
  * Arquitetura de Gateway central, execução assíncrona em background,
  * persistência de estado, carregamento dinâmico de skills,
- * Cérebro de Memória Episódica e Autonomous Loop.
+ * Cérebro de Memória Episódica, Autonomous Loop e Síntese de Voz Ultra-Realista.
  */
 
 const express = require('express');
@@ -15,6 +15,8 @@ const selfCoding = require('../modules/corvo_self_coding');
 const godMode = require('../modules/corvo_god_mode');
 const brain = require('./corvo_brain');
 const autonomousLoop = require('./corvo_loop');
+const voiceEngine = require('./corvo_voice');
+const toolsRegistry = require('./corvo_tools_registry');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const app = express();
@@ -58,32 +60,14 @@ async function spawnSubagent(jobId, prompt, contextData = {}) {
   activeJobs.set(jobId, { id: jobId, status: 'running', prompt, startTime: Date.now() });
 
   try {
-    if (!genAI) throw new Error('GEMINI_API_KEY não configurada no .env');
-    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-
-    const skills = loadDynamicSkills();
-    const skillsContext = skills.map(s => `--- SKILL: ${s.name} ---\n${s.content}`).join('\n\n');
-    const arquivosProjeto = selfCoding.listarArquivos();
-
-    const fullPrompt = `Você é o Corvo Subagente Autônomo God Mode com Cérebro Episódico.
-Contexto do sistema: Android / Termux / CORVO AGENTE MOBILE Mobile com privilégios absolutos sob o comando do @CORVO291.
-Arquivos do projeto disponíveis para edição: ${JSON.stringify(arquivosProjeto.files || [])}
-Skills disponíveis:\n${skillsContext}
-
-Tarefa solicitada:
-${prompt}
-
-Dados de contexto:
-${JSON.stringify(contextData, null, 2)}
-
-Execute a tarefa com precisão absoluta utilizando o God Mode, memória episódica e autorrecuperação. Retorne o resultado final.`;
-
-    const response = await model.generateContent(fullPrompt);
-    const text = response.response.text();
-
-    await db.saveJob(jobId, 'completed', prompt, text);
-    activeJobs.set(jobId, { id: jobId, status: 'completed', prompt, result: text });
-    brain.remember('subagent_success', `Job ${jobId} concluído com sucesso.`);
+    // Dispara via loop autônomo com persistência real
+    autonomousLoop.runAutonomousMission(jobId, prompt, {
+      maxSteps: 25,
+      onComplete: async (res) => {
+        await db.saveJob(jobId, 'completed', prompt, res.report);
+        activeJobs.set(jobId, { id: jobId, status: 'completed', prompt, result: res.report });
+      }
+    });
   } catch (error) {
     await db.saveJob(jobId, 'failed', prompt, null, error.message);
     activeJobs.set(jobId, { id: jobId, status: 'failed', prompt, error: error.message });
@@ -96,9 +80,10 @@ Execute a tarefa com precisão absoluta utilizando o God Mode, memória episódi
 app.get('/status', (req, res) => {
   res.json({
     status: 'online',
-    platform: 'Corvo AGENTE MOBILE God Mode & Autonomous Loop Daemon',
+    platform: 'Corvo AGENTE MOBILE God Mode & OpenClaw Loop Daemon',
     uptime: process.uptime(),
-    skillsCarregadas: loadDynamicSkills().map(s => s.name)
+    skillsCarregadas: loadDynamicSkills().map(s => s.name),
+    ferramentasDisponiveis: Object.keys(toolsRegistry)
   });
 });
 
@@ -109,7 +94,7 @@ app.post('/subagent/spawn', (req, res) => {
   const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   spawnSubagent(jobId, prompt, context || {});
 
-  res.json({ success: true, jobId, message: 'Subagente disparado com sucesso.' });
+  res.json({ success: true, jobId, message: 'Subagente disparado com sucesso em loop autônomo.' });
 });
 
 app.get('/subagent/:jobId', async (req, res) => {
@@ -128,6 +113,23 @@ app.post('/mission/start', (req, res) => {
   res.json({ success: true, missionId, message: 'Missão iniciada em Autonomous Loop contínuo.' });
 });
 
+// Endpoint para gerar Áudio / Voz Ultra-Realista
+app.post('/voice/generate', async (req, res) => {
+  const { text, voiceId } = req.body;
+  if (!text) return res.status(400).json({ error: 'Texto é obrigatório' });
+
+  const result = await voiceEngine.gerarAudio(text, voiceId);
+  res.json(result);
+});
+
+// Ferramentas Diretas
+app.post('/tools/execute', async (req, res) => {
+  const { tool, args } = req.body;
+  if (!tool) return res.status(400).json({ error: 'Nome da ferramenta é obrigatório' });
+  const result = await autonomousLoop.dispatchTool(tool, args || {});
+  res.json(result);
+});
+
 app.get('/sensors/gps', (req, res) => { res.json(sensors.getLocalizacao()); });
 app.post('/sensors/camera', (req, res) => { res.json(sensors.tirarFoto(req.body.camera || '0')); });
 app.post('/sensors/audio', (req, res) => { res.json(sensors.gravarAudio(req.body.duracao || 5)); });
@@ -141,14 +143,10 @@ app.post('/code/write', (req, res) => { res.json(selfCoding.escreverCodigo(req.b
 app.post('/god/shell', (req, res) => { res.json(godMode.executarShell(req.body.comando, req.body.root || false)); });
 app.get('/god/apps', (req, res) => { res.json(godMode.listarApps(req.query.tipo || 'all')); });
 app.post('/god/app/open', (req, res) => { res.json(godMode.abrirApp(req.body.package)); });
-app.get('/god/screenshot', (req, res) => { res.json(godMode.tirarPrint()); });
-app.post('/god/volume', (req, res) => { res.json(godMode.ajustarVolume(req.body.stream || '3', req.body.volume || '10')); });
-app.post('/god/wifi', (req, res) => { res.json(godMode.controlarWifi(req.body.estado)); });
-app.post('/god/call', (req, res) => { res.json(godMode.fazerLigacao(req.body.numero)); });
-app.post('/god/sms/send', (req, res) => { res.json(godMode.enviarSms(req.body.numero, req.body.mensagem)); });
-app.post('/god/clipboard/set', (req, res) => { res.json(godMode.copiarClipboard(req.body.texto || '')); });
-app.get('/god/clipboard/get', (req, res) => { res.json(godMode.lerClipboard()); });
-app.post('/god/vibrate', (req, res) => { res.json(godMode.vibrar(req.body.ms || 500)); });
+app.get('/god/screenshot', async (req, res) => {
+  const r = await toolsRegistry.screen_capture.execute();
+  res.json(r);
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`[CORVO AGENTE MOBILE] Daemon Brain & Autonomous Loop rodando na porta ${PORT}.`);

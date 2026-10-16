@@ -1,5 +1,5 @@
 /**
- * 🦅 CORVO AGENTE MOBILE - CLIENTE WHATSAPP INTEGRADO AO GATEWAY (COM FILA OFFLINE)
+ * 🦅 CORVO AGENTE MOBILE - CLIENTE WHATSAPP INTEGRADO AO GATEWAY (COM FILA OFFLINE & ÁUDIO REALISTA)
  */
 
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
@@ -8,9 +8,9 @@ const P = require('pino');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
-const db = require('./corvo_db');
+const db = require('../core/corvo_db');
 
-const authDir = path.resolve(__dirname, 'data', 'auth_info_baileys');
+const authDir = path.resolve(__dirname, '../../data', 'auth_info_baileys');
 if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
 const GATEWAY_URL = 'http://localhost:3333';
@@ -101,7 +101,6 @@ async function startWhatsApp() {
       }
     } else if (connection === 'open') {
       console.log('🦅 CORVO WHATSAPP CONECTADO COM SUCESSO!');
-      // Processa fila pendente assim que reconectar
       processarFilaOffline(sock);
     }
   });
@@ -116,8 +115,10 @@ async function startWhatsApp() {
     if (text) {
       console.log(`[MSG RECEBIDA] De ${jid}: ${text}`);
 
+      // Se a mensagem pedir áudio explícito ("fala", "em áudio", "manda áudio")
+      const querAudio = /(manda|envia|fala|grava|mande).*([áa]udio|voz)/i.test(text);
+
       try {
-        // Tenta disparar no Gateway local
         const res = await axios.post(`${GATEWAY_URL}/subagent/spawn`, {
           prompt: text,
           context: { jid, sender: m.pushName || 'Usuário' },
@@ -125,24 +126,52 @@ async function startWhatsApp() {
         });
 
         const jobId = res.data.jobId;
-        await sock.sendMessage(jid, { text: `[CORVO] Ordem recebida. Subagente disparado (ID: ${jobId}). Processando...` }, { quoted: m });
+        await sock.sendMessage(jid, { text: `🦅 [CORVO] Ordem recebida. Subagente autônomo iniciado (ID: ${jobId}). Executando até o fim...` });
 
-        setTimeout(async () => {
+        // Polling inteligente até o subagente terminar de verdade
+        let tentativas = 0;
+        const maxTentativas = 30; // até 2.5 minutos de acompanhamento
+        const checkInterval = setInterval(async () => {
+          tentativas++;
           try {
             const check = await axios.get(`${GATEWAY_URL}/subagent/${jobId}`);
             if (check.data && check.data.result) {
-              await sock.sendMessage(jid, { text: `🤖 *RESPOSTA DO SUBAGENTE*:\n\n${check.data.result}` });
+              clearInterval(checkInterval);
+
+              const resposta = check.data.result;
+
+              // Envia texto solto (sem citação para o Marcos)
+              await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${resposta}` });
+
+              // Se pediu áudio, gera a voz ultra-realista e envia como mensagem de voz nativa (PTT)
+              if (querAudio) {
+                try {
+                  const voiceRes = await axios.post(`${GATEWAY_URL}/voice/generate`, { text: resposta.substring(0, 400) });
+                  if (voiceRes.data && voiceRes.data.filePath && fs.existsSync(voiceRes.data.filePath)) {
+                    const audioBuffer = fs.readFileSync(voiceRes.data.filePath);
+                    await sock.sendMessage(jid, {
+                      audio: audioBuffer,
+                      mimetype: 'audio/mp4',
+                      ptt: true // Envia como áudio gravado no WhatsApp
+                    });
+                  }
+                } catch (vErr) {
+                  console.error('[VOICE SEND ERROR]', vErr.message);
+                }
+              }
+
+            } else if (tentativas >= maxTentativas) {
+              clearInterval(checkInterval);
             }
           } catch (e) {
-            console.error('Erro ao buscar resultado do job:', e.message);
+            console.error('Erro no polling do subagente:', e.message);
           }
-        }, 10000);
+        }, 5000);
 
       } catch (error) {
-        // Se a API falhou ou está sem internet, salva na fila offline do SQLite
         console.warn('[OFFLINE WARNING] Gateway indisponível ou sem internet. Salvando na fila offline do SQLite...');
         db.addOfflineQueue(jid, text);
-        await sock.sendMessage(jid, { text: `[MODO OFFLINE] Sem conexão com o Daemon/Internet. Sua ordem foi salva na fila SQLite e será processada automaticamente assim que a conexão for restabelecida.` }, { quoted: m });
+        await sock.sendMessage(jid, { text: `[MODO OFFLINE] Sem conexão com o Daemon/Internet. Sua ordem foi salva na fila SQLite e será processada automaticamente assim que a conexão for restabelecida.` });
       }
     }
   });
