@@ -731,7 +731,7 @@ app.get('/models', async (req, res) => {
 
 // Endpoint conversacional robusto com Multimodal (Texto, Fotos, Áudios, Vídeos)
 app.post('/chat', async (req, res) => {
-  const { message, file } = req.body;
+  const { message, file, chatId, sender, isDono } = req.body;
   if (!message && !file) return res.status(400).json({ error: 'Mensagem ou arquivo vazio' });
 
   try {
@@ -744,6 +744,9 @@ app.post('/chat', async (req, res) => {
     // Recupera memórias e soluções comprovadas
     const recalled = await brain.recall(message ? message.slice(0, 30) : 'midia', 4);
     const contextMemo = recalled.length > 0 ? `\nMemórias:\n${recalled.join('\n')}\n` : '';
+
+    // Recupera histórico recente de mensagens do grupo (Estilo OpenClaw)
+    const groupContext = chatId ? brain.getGroupContext(chatId, 15) : '';
 
     const contents = [];
 
@@ -885,7 +888,7 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
           const resAI = await openaiClient.chat.completions.create({
             model: mId,
             messages: [
-              { role: 'system', content: `${systemPrompt}${contextMemo}` },
+              { role: 'system', content: `${systemPrompt}${groupContext}${contextMemo}` },
               { role: 'user', content: userContent }
             ],
             temperature: 0.3

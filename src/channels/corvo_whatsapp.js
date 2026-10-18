@@ -171,6 +171,13 @@ async function startWhatsApp() {
     const myPhone = sock.user?.id ? sock.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
     const sender = m.key.participant || jid;
     const isMarcos = sender.includes(MARCOS_PHONE);
+    const cleanText = text.trim();
+
+    // Grava no buffer de contexto contínuo do grupo/chat (Estilo OpenClaw)
+    const brain = require('../core/corvo_brain');
+    const autonomousLoop = require('../core/corvo_loop');
+    const corvoBrowser = require('../modules/corvo_browser');
+    brain.recordGroupMessage(jid, isMarcos ? 'Marcos (DONO)' : (m.pushName || 'Membro'), text);
 
     // Regra anti-ruído: Em grupos, silêncio absoluto se estiver respondendo a outro bot ou se não for marcado
     if (isGroup) {
@@ -199,6 +206,49 @@ async function startWhatsApp() {
       await sock.sendMessage(jid, { react: { text: chosenEmoji, key: m.key } });
     } catch (e) {}
 
+    // ================= COMANDOS ESTILO OPENCLAW (/reset, /restart, /stop, /status) =================
+    // 1. Comando /stop ou /parar
+    if (/^\/(?:stop|parar|cancelar)\b/i.test(cleanText)) {
+      const count = autonomousLoop.stopAllMissions();
+      try { await corvoBrowser.close(); } catch (e) {}
+      await sock.sendMessage(jid, { text: `🛑 *Missão Interrompida*: Todas as ferramentas e processos foram parados. (${count} tarefa(s) cancelada(s)).` });
+      return;
+    }
+
+    // 2. Comando /reset ou /clear
+    if (/^\/(?:reset|clear|novo|limpar)\b/i.test(cleanText)) {
+      brain.resetChatContext(jid);
+      await sock.sendMessage(jid, { text: `🦅 *Contexto Resetado*: Memória recente desta conversa foi limpa. Iniciando nova sessão do zero.` });
+      return;
+    }
+
+    // 3. Comando /restart ou /reiniciar
+    if (/^\/(?:restart|reiniciar)\b/i.test(cleanText)) {
+      if (!isMarcos) {
+        await sock.sendMessage(jid, { text: '❌ Apenas o Dono (Marcos) tem autoridade para reiniciar o núcleo.' });
+        return;
+      }
+      await sock.sendMessage(jid, { text: `🔄 *Reiniciando*: Reiniciando serviços do Corvo Agente Mobile... voltando em 2 segundos.` });
+      setTimeout(() => process.exit(0), 1000);
+      return;
+    }
+
+    // 4. Comando /status ou /info
+    if (/^\/(?:status|info|sistema)\b/i.test(cleanText)) {
+      const mob = brain.getMobileGovernor();
+      const state = brain.getMobileState();
+      const infoText = `🦅 *CORVO AGENTE MOBILE // SISTEMA*\n\n` +
+        `• *Modelo Ativo:* \`${process.env.PRIMARY_MODEL || 'isacloud/gemini-3.8-flash-high'}\`\n` +
+        `• *Modo:* \`${mob.mode.toUpperCase()}\` (${mob.recommendation})\n` +
+        `• *Bateria:* ${mob.batteryPercentage}% ${mob.isCharging ? '⚡ (Carregando)' : '🔋'}\n` +
+        `• *RAM Livre:* ${mob.freeMemMb} MB / ${state.ramTotalMb} MB\n` +
+        `• *Uptime:* ${state.uptimeMinutes} minutos\n` +
+        `• *Navegador Web:* ${corvoBrowser.browser ? '🟢 Ativo' : '⚪ Standby'}\n` +
+        `• *Missões Ativas:* ${autonomousLoop.getActiveMissionsCount ? autonomousLoop.getActiveMissionsCount() : 0}`;
+      await sock.sendMessage(jid, { text: infoText });
+      return;
+    }
+
     // Indicador de "digitando..." contínuo no WhatsApp
     await sock.sendPresenceUpdate('composing', jid);
     const typingTimer = setInterval(async () => {
@@ -213,12 +263,11 @@ async function startWhatsApp() {
 
     try {
       if (isMission) {
-        // Envia mensagem de estado ao vivo que vai sendo editada (estilo OpenClaw)
+        // Envia mensagem de estado ao vivo limpa (sem números tipo [1/6], apenas a ação pura estilo OpenClaw)
         const statusMsg = await sock.sendMessage(jid, {
-          text: '⏳ *[Iniciando...]* Analisando objetivo e preparando arsenal...'
+          text: '⏳ *Analisando objetivo e preparando arsenal...*'
         });
 
-        const autonomousLoop = require('../core/corvo_loop');
         const missionId = `mission_${Date.now()}`;
 
         const missionRes = await autonomousLoop.runAutonomousMission(missionId, text, {
@@ -227,8 +276,9 @@ async function startWhatsApp() {
             try {
               await sock.sendPresenceUpdate('composing', jid);
               if (statusMsg && statusMsg.key) {
+                // Exibe apenas a descrição limpa, sem fração numérica
                 await sock.sendMessage(jid, {
-                  text: `⏳ *[Passo ${step}/${maxSteps}]* ${description}`,
+                  text: `⏳ *${description}*`,
                   edit: statusMsg.key
                 });
               }

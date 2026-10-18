@@ -280,6 +280,48 @@ const brain = {
         ? 'Bateria baixa no celular: rodar em modo silencioso e evitar loops longos.'
         : 'Hardware liberado: Potência máxima APEX autorizada.'
     };
+  },
+
+  /**
+   * Grava mensagem no buffer circular de contexto do grupo (Estilo OpenClaw)
+   */
+  recordGroupMessage(chatId, senderName, text) {
+    if (!chatId || !text) return;
+    const cid = String(chatId);
+    if (!global.__corvoGroupBuffers) global.__corvoGroupBuffers = new Map();
+    const map = global.__corvoGroupBuffers;
+    if (!map.has(cid)) map.set(cid, []);
+    const buf = map.get(cid);
+    buf.push({
+      sender: senderName || 'Membro',
+      text: String(text).slice(0, 300),
+      time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    });
+    if (buf.length > 30) buf.shift(); // Mantém as últimas 30 mensagens ativas
+  },
+
+  /**
+   * Retorna o histórico de contexto do grupo para injeção no prompt
+   */
+  getGroupContext(chatId, limit = 15) {
+    if (!chatId || !global.__corvoGroupBuffers) return '';
+    const cid = String(chatId);
+    const buf = global.__corvoGroupBuffers.get(cid);
+    if (!buf || buf.length === 0) return '';
+    const slice = buf.slice(-limit);
+    const formatted = slice.map(m => `[${m.time}] ${m.sender}: "${m.text}"`).join('\n');
+    return `\n--- CONTEXTO RECENTE DO GRUPO (ÚLTIMAS ${slice.length} MENSAGENS) ---\n${formatted}\n----------------------------------------------------\n`;
+  },
+
+  /**
+   * Reseta todo o contexto e histórico de um chat/grupo (Comando /reset)
+   */
+  resetChatContext(chatId) {
+    if (!chatId || !global.__corvoGroupBuffers) return true;
+    const cid = String(chatId);
+    global.__corvoGroupBuffers.delete(cid);
+    console.log(`[BRAIN CONTEXT] Contexto do chat ${cid} resetado com sucesso.`);
+    return true;
   }
 };
 

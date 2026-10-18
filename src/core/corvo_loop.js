@@ -25,6 +25,32 @@ const openaiClient = (openaiBaseUrl && openaiApiKey)
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
+// Controle de Missões Ativas (Permite abortar com /stop estilo OpenClaw)
+const activeMissions = new Map();
+
+function abortMission(missionId) {
+  if (activeMissions.has(missionId)) {
+    const m = activeMissions.get(missionId);
+    m.aborted = true;
+    activeMissions.delete(missionId);
+    return true;
+  }
+  return false;
+}
+
+function stopAllMissions() {
+  const count = activeMissions.size;
+  for (const [id, m] of activeMissions.entries()) {
+    m.aborted = true;
+  }
+  activeMissions.clear();
+  return count;
+}
+
+function getActiveMissionsCount() {
+  return activeMissions.size;
+}
+
 // Formata a lista de ferramentas disponíveis para o modelo
 function getToolsPromptDescription() {
   // Garante que ferramentas customizadas estejam carregadas
@@ -138,6 +164,8 @@ async function runAutonomousMission(missionId, objective, options = {}) {
   console.log(`==================================================\n`);
 
   brain.saveMission(missionId, objective, 'running', 0, null);
+  const missionHandle = { id: missionId, aborted: false };
+  activeMissions.set(missionId, missionHandle);
 
   if (!openaiClient && !genAI) {
     const err = 'Nenhum provedor de IA configurado (nem ISA Cloud/OmniRoute nem Google Gemini). Configure o .env!';
@@ -194,6 +222,13 @@ ${toolsDoc}`;
   let finalReport = '';
 
   while (!completed && step < MAX_STEPS) {
+    if (missionHandle.aborted) {
+      console.log(`[LOOP ABORT] Missão [${missionId}] cancelada pelo usuário (/stop).`);
+      brain.saveMission(missionId, objective, 'aborted', step, 'Cancelado pelo usuário.');
+      activeMissions.delete(missionId);
+      return { success: false, steps: step, error: 'Missão cancelada pelo comando /stop.' };
+    }
+
     step++;
     console.log(`\n>>> [LOOP STEP ${step}/${MAX_STEPS}] Avaliando e Executando...`);
 
@@ -276,6 +311,7 @@ ${toolsDoc}`;
           completed = true;
           finalReport = parsed.final_report || replyText;
           console.log(`\n🎉 [MISSÃO CONCLUÍDA COM SUCESSO NO PASSO ${step}]`);
+          activeMissions.delete(missionId);
           brain.saveMission(missionId, objective, 'completed', step, finalReport);
           brain.remember('mission_success', `Missão ${missionId} completada: ${objective}`);
           if (options.onComplete) options.onComplete({ success: true, step, report: finalReport });
@@ -327,6 +363,7 @@ ${toolsDoc}`;
   }
 
   if (!completed) {
+    activeMissions.delete(missionId);
     const timeoutMsg = `Limite de ${MAX_STEPS} passos atingido para a missão.`;
     console.warn(`[LOOP TIMEOUT] ${timeoutMsg}`);
     brain.saveMission(missionId, objective, 'max_steps_reached', step, timeoutMsg);
@@ -334,4 +371,10 @@ ${toolsDoc}`;
   }
 }
 
-module.exports = { runAutonomousMission, dispatchTool };
+module.exports = {
+  runAutonomousMission,
+  dispatchTool,
+  abortMission,
+  stopAllMissions,
+  getActiveMissionsCount
+};

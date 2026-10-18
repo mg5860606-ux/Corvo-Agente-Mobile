@@ -55,13 +55,13 @@ graph TD
 
 | Componente | Arquivo | Responsabilidade |
 | :--- | :--- | :--- |
-| **🔄 Autonomous Loop** | [`src/core/corvo_loop.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_loop.js) | Motor Re-Act recursivo de resolução de problemas e execução autônoma de missões. |
-| **🧠 Cérebro Episódico** | [`src/core/corvo_brain.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_brain.js) | Memória episódica com busca semântica (BM25/TF-IDF), histórico de missões, telemetria e persistência atômica segura. |
+| **🔄 Autonomous Loop** | [`src/core/corvo_loop.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_loop.js) | Motor Re-Act recursivo de resolução de problemas e execução autônoma de missões com telemetria em tempo real. |
+| **🧠 Cérebro Episódico & Mobile Governor** | [`src/core/corvo_brain.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_brain.js) | Memória episódica com busca semântica, histórico de missões, telemetria de hardware (RAM/bateria), auto Wake-Lock no Android e contexto contínuo de grupos. |
 | **🛠️ Arsenal de Ferramentas** | [`src/core/corvo_tools_registry.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_tools_registry.js) | Execução de shell/Termux/Kali, navegador, leitura/escrita de arquivos, prints e criação dinâmica de novas ferramentas (`create_custom_tool`). |
 | **🌐 Navegador Autônomo** | [`src/modules/corvo_browser.js`](file:///c:/Corvo-Agente-Mobile/src/modules/corvo_browser.js) | Automação web real com Puppeteer (navegação, cliques, digitação, prints de tela e downloads). |
-| **🚪 Gateway & Painel Web** | [`src/core/corvo_gateway.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_gateway.js) | Servidor HTTP com UI completa, histórico ao vivo, envio de áudios, imagens, controle de canais e execução de missões. |
-| **✈️ Canal Telegram** | [`src/channels/corvo_telegram.js`](file:///c:/Corvo-Agente-Mobile/src/channels/corvo_telegram.js) | Bot completo via polling com transcrição de áudio, geração de voz, envio de mídias e modo autônomo. |
-| **💬 Canal WhatsApp** | [`src/channels/corvo_whatsapp.js`](file:///c:/Corvo-Agente-Mobile/src/channels/corvo_whatsapp.js) | Conexão multi-device via Baileys com suporte a QR Code / Pairing Code e persistência na pasta `data/`. |
+| **🚪 Gateway & Painel Web** | [`src/core/corvo_gateway.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_gateway.js) | Servidor HTTP com UI completa, suporte a upload de fotos/áudio/vídeo, seletor de modelos de IA em tempo real e controle dos canais. |
+| **✈️ Canal Telegram** | [`src/channels/corvo_telegram.js`](file:///c:/Corvo-Agente-Mobile/src/channels/corvo_telegram.js) | Bot completo via polling com suporte a áudio/voz, comandos `/stop`, `/reset`, `/status`, respostas em grupos com menção e execução autônoma de missões. |
+| **💬 Canal WhatsApp** | [`src/channels/corvo_whatsapp.js`](file:///c:/Corvo-Agente-Mobile/src/channels/corvo_whatsapp.js) | Conexão multi-device via Baileys com suporte a QR Code / Pairing Code, fila offline resiliente e persistência na pasta `data/`. |
 | **🎙️ Engine de Voz** | [`src/core/corvo_voice.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_voice.js) | Síntese de voz com ElevenLabs e geração de áudios para Telegram e WhatsApp. |
 | **🗄️ Persistência Mobile** | [`src/core/corvo_db.js`](file:///c:/Corvo-Agente-Mobile/src/core/corvo_db.js) | Gerenciador de fila e estado persistente 100% JavaScript (sem travas de compilação C++ no Android). |
 | **🚀 Master Runner** | [`start-master.js`](file:///c:/Corvo-Agente-Mobile/start-master.js) | Inicializador simples dos serviços essenciais (Gateway + Telegram). |
@@ -72,7 +72,7 @@ graph TD
 
 O Corvo conta com ferramentas reais prontas para uso no Autonomous Loop:
 
-1. **`browser_navigate` / `browser_click` / `browser_type` / `browser_screenshot`**: Navegação web autônoma completa em sites reais.
+1. **`browser_navigate` / `browser_click` / `browser_type` / `browser_screenshot` / `browser_download` / `browser_eval`**: Navegação web autônoma completa em sites reais usando Puppeteer.
 2. **`exec_shell`**: Execução de comandos no terminal (Termux, Bash, PowerShell e Kali Linux via WSL2).
 3. **`read_file` / `write_file`**: Leitura, inspeção e criação/modificação de código e arquivos.
 4. **`web_search`**: Busca de informações ao vivo na internet via DuckDuckGo.
@@ -80,6 +80,18 @@ O Corvo conta com ferramentas reais prontas para uso no Autonomous Loop:
 6. **`spa_auditor`**: Reconhecimento e auditoria de aplicações web e rotas.
 7. **`screen_capture`**: Captura de tela do dispositivo para análise multimodal.
 8. **`create_custom_tool` (Tool Forge)**: Capacidade de criar, compilar e registrar novas funções em JavaScript em tempo real durante a execução caso precise de uma ferramenta inexistente.
+
+---
+
+## 📲 Comandos Disponíveis no Telegram
+
+O bot do Telegram responde diretamente a comandos de controle:
+
+- `/status` ou `/info` — Exibe relatório completo de saúde do sistema: modelo de IA ativo, nível de bateria, status de carregamento, memória RAM livre, uptime e estado do navegador.
+- `/stop`, `/parar` ou `/cancelar` — Cancela imediatamente todas as missões em execução no loop autônomo e encerra tarefas pendentes do navegador.
+- `/reset` ou `/clear` — Limpa a memória recente da conversa/grupo, reiniciando o contexto do zero.
+- `/restart` ou `/reiniciar` — Reinicia os serviços do Corvo Agente (restrito ao Dono).
+- **Missões em Linguagem Natural** — Mensagens iniciadas por verbos de ação como `crie`, `faça`, `navegue`, `baixe`, `audite`, `pesquise` ou `execute` disparam automaticamente o **Autonomous Loop**.
 
 ---
 
@@ -108,10 +120,14 @@ GATEWAY_AUTH_TOKEN=seu_token_opcional_de_protecao
 
 # Telegram (Opcional)
 TELEGRAM_BOT_TOKEN=seu_token_do_botfather
+MARCOS_TELEGRAM_ID=8273924319
 
 # Síntese de Voz (Opcional)
 ELEVENLABS_API_KEY=sua_chave_elevenlabs
 ELEVENLABS_VOICE_ID=EXAVITQu4vr4xnSDxMaL
+
+# Caminho Personalizado do Chrome/Chromium (Opcional)
+CHROME_PATH=
 ```
 
 ---
@@ -142,18 +158,22 @@ npm test
 
 ---
 
-## 📲 Canais de Comunicação
+## 📱 Execução no Android (Termux)
 
-### ✈️ Telegram
-1. Obtenha o token do seu bot com o [@BotFather](https://t.me/BotFather).
-2. Configure `TELEGRAM_BOT_TOKEN` no `.env`.
-3. Inicie com `npm run telegram` ou via `start-master.js`.
-4. O bot responde comandos diretos, mensagens de texto, recebe áudios e executa o Autonomous Loop quando acionado.
+Para rodar no celular via Termux:
 
-### 💬 WhatsApp (Baileys)
-1. Inicie com `npm run whatsapp` ou ative pelo Painel Web.
-2. Escaneie o QR Code no terminal ou use o fluxo de Pairing Code.
-3. A sessão é armazenada de forma segura na pasta `data/auth_info_baileys/`.
+```bash
+# Instalar dependências básicas
+pkg update && pkg install -y git nodejs-lts python
+
+# Acessar a pasta e instalar dependências do projeto
+npm install
+
+# Iniciar o sistema
+npm start
+```
+
+> 🔒 O sistema conta com ativação automática do **Termux Wake-Lock** para impedir que o sistema operacional Android suspenda o processo em segundo plano.
 
 ---
 

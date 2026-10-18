@@ -230,6 +230,22 @@ async function startPolling() {
             const chatId = msg.chat.id;
             const chatType = msg.chat.type; // 'private', 'group', 'supergroup', 'channel'
             const isDono = senderId === MARCOS_TG_ID;
+            const cleanText = text.trim();
+
+            // Grava no buffer de contexto contínuo do grupo/chat (Estilo OpenClaw)
+            const brain = require('../core/corvo_brain');
+            const autonomousLoop = require('../core/corvo_loop');
+            const corvoBrowser = require('../modules/corvo_browser');
+            brain.recordGroupMessage(chatId, isDono ? 'Marcos (DONO)' : (msg.from.first_name || 'Membro'), text);
+
+            // Regra anti-ruído: Se estiver respondendo a outro bot, silêncio absoluto!
+            if (msg.reply_to_message?.from?.is_bot) {
+              const repliedUser = (msg.reply_to_message.from.username || '').toLowerCase();
+              if (botUsername && repliedUser && repliedUser !== botUsername.toLowerCase()) {
+                console.log(`[TG SILENCE] Usuário respondendo a outro bot (@${repliedUser}). Ficando em silêncio.`);
+                continue;
+              }
+            }
 
             // Se for grupo/supergrupo, só responde se for chamada explicitamente
             if (chatType === 'group' || chatType === 'supergroup') {
@@ -240,16 +256,9 @@ async function startPolling() {
                 isMentioned = true;
               }
 
-              // Verifica menções por nome configurado/chamados comuns ('lani', 'corvo')
-              if (/\b(lani|corvo)\b/i.test(text)) {
-                isMentioned = true;
-              }
-
               // Verifica se é reply para uma mensagem enviada pelo próprio bot
-              if (msg.reply_to_message && msg.reply_to_message.from && msg.reply_to_message.from.is_bot) {
-                if (botUsername && msg.reply_to_message.from.username && msg.reply_to_message.from.username.toLowerCase() === botUsername.toLowerCase()) {
-                  isMentioned = true;
-                }
+              if (msg.reply_to_message?.from?.username && botUsername && msg.reply_to_message.from.username.toLowerCase() === botUsername.toLowerCase()) {
+                isMentioned = true;
               }
 
               if (!isMentioned) {
@@ -263,6 +272,54 @@ async function startPolling() {
             // Reação dinâmica com emoji na mensagem recebida (estilo OpenClaw)
             await reactToMessage(chatId, msg.message_id);
 
+            // ================= COMANDOS ESTILO OPENCLAW (/reset, /restart, /stop, /status) =================
+            // 1. Comando /stop ou /parar
+            if (/^\/(?:stop|parar|cancelar)\b/i.test(cleanText)) {
+              const count = autonomousLoop.stopAllMissions();
+              try { await corvoBrowser.close(); } catch (e) {}
+              const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
+              await sendMessage(chatId, `🛑 <b>Missão Interrompida</b>: Todas as ferramentas e processos em execução foram parados imediatamente. (${count} tarefa(s) cancelada(s)).`, replyId);
+              continue;
+            }
+
+            // 2. Comando /reset ou /clear
+            if (/^\/(?:reset|clear|novo|limpar)\b/i.test(cleanText)) {
+              brain.resetChatContext(chatId);
+              const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
+              await sendMessage(chatId, `🦅 <b>Contexto Resetado</b>: Memória recente desta conversa foi limpa. Iniciando nova sessão do zero.`, replyId);
+              continue;
+            }
+
+            // 3. Comando /restart ou /reiniciar
+            if (/^\/(?:restart|reiniciar)\b/i.test(cleanText)) {
+              if (!isDono) {
+                await sendMessage(chatId, '❌ Apenas o Dono (Marcos) tem autoridade para reiniciar o núcleo.');
+                continue;
+              }
+              const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
+              await sendMessage(chatId, `🔄 <b>Reiniciando</b>: Reiniciando serviços do Corvo Agente Mobile... voltando em 2 segundos.`, replyId);
+              setTimeout(() => process.exit(0), 1000);
+              continue;
+            }
+
+            // 4. Comando /status ou /info
+            if (/^\/(?:status|info|sistema)\b/i.test(cleanText)) {
+              const mob = brain.getMobileGovernor();
+              const state = brain.getMobileState();
+              const infoText = `🦅 <b>CORVO AGENTE MOBILE // SISTEMA</b>\n\n` +
+                `• <b>Modelo Ativo:</b> <code>${process.env.PRIMARY_MODEL || 'isacloud/gemini-3.8-flash-high'}</code>\n` +
+                `• <b>Modo de Operação:</b> <code>${mob.mode.toUpperCase()}</code> (${mob.recommendation})\n` +
+                `• <b>Bateria:</b> ${mob.batteryPercentage}% ${mob.isCharging ? '⚡ (Carregando)' : '🔋'}\n` +
+                `• <b>RAM Livre:</b> ${mob.freeMemMb} MB / ${state.ramTotalMb} MB\n` +
+                `• <b>Uptime:</b> ${state.uptimeMinutes} minutos\n` +
+                `• <b>Plataforma:</b> ${state.isTermux ? 'Android Termux' : state.platform}\n` +
+                `• <b>Navegador Web:</b> ${corvoBrowser.browser ? '🟢 Ativo' : '⚪ Standby'}\n` +
+                `• <b>Missões Ativas:</b> ${autonomousLoop.getActiveMissionsCount ? autonomousLoop.getActiveMissionsCount() : 0}`;
+              const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
+              await sendMessage(chatId, infoText, replyId);
+              continue;
+            }
+
             // Inicia indicador de digitação contínuo
             await sendChatAction(chatId, 'typing');
             const typingTimer = setInterval(() => sendChatAction(chatId, 'typing'), 4500);
@@ -272,14 +329,13 @@ async function startPolling() {
 
             try {
               if (isMission) {
-                // Mensagem de estado ao vivo que vai sendo editada (estilo OpenClaw)
+                // Mensagem de estado ao vivo limpa (sem números tipo [1/6], apenas a ação pura estilo OpenClaw)
                 const statusMsg = await sendMessage(
                   chatId,
-                  '⏳ <i>[Iniciando...]</i> Analisando objetivo e preparando arsenal...',
+                  '⏳ <i>Analisando objetivo e preparando arsenal...</i>',
                   (isDono && chatType === 'private') ? null : msg.message_id
                 );
 
-                const autonomousLoop = require('../core/corvo_loop');
                 const missionId = `mission_${Date.now()}`;
 
                 const missionRes = await autonomousLoop.runAutonomousMission(missionId, text, {
@@ -287,14 +343,15 @@ async function startPolling() {
                   onProgress: async ({ step, maxSteps, description }) => {
                     await sendChatAction(chatId, 'typing');
                     if (statusMsg && statusMsg.message_id) {
-                      await editMessage(chatId, statusMsg.message_id, `⏳ <b>[Passo ${step}/${maxSteps}]</b> ${description}`);
+                      // Exibe apenas a descrição limpa, sem fração numérica
+                      await editMessage(chatId, statusMsg.message_id, `⏳ <i>${description}</i>`);
                     }
                   }
                 });
 
                 clearInterval(typingTimer);
 
-                // Apaga a mensagem de estado para não poluir o chat
+                // Apaga a mensagem de estado para manter o chat 100% limpo
                 if (statusMsg && statusMsg.message_id) {
                   await deleteMessage(chatId, statusMsg.message_id);
                 }
@@ -337,6 +394,7 @@ async function startPolling() {
                 const chatRes = await axios.post(`${GATEWAY_URL}/chat`, {
                   message: text,
                   file: filePayload,
+                  chatId: String(chatId),
                   sender: isDono ? 'Marcos (DONO)' : (msg.from.first_name || 'Usuário'),
                   isDono: isDono
                 }, { headers });
