@@ -2,7 +2,7 @@
  * 🦅 CORVO AGENTE MOBILE - CLIENTE WHATSAPP INTEGRADO AO GATEWAY (COM FILA OFFLINE & ÁUDIO REALISTA)
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, downloadMediaMessage } = require('@whiskeysockets/baileys');
 const readline = require('readline');
 const P = require('pino');
 const path = require('path');
@@ -16,6 +16,7 @@ if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:3333';
+const GATEWAY_AUTH_TOKEN = process.env.GATEWAY_AUTH_TOKEN || '';
 const MARCOS_PHONE = String(process.env.MARCOS_WHATSAPP_PHONE || '5511947285405');
 
 const rl = readline.createInterface({
@@ -35,12 +36,15 @@ async function processarFilaOffline(sock) {
     const pendentes = await db.getPendingQueue();
     if (pendentes && pendentes.length > 0) {
       console.log(`[QUEUE] Encontradas ${pendentes.length} mensagens pendentes na fila offline. Processando...`);
+      const headers = {};
+      if (GATEWAY_AUTH_TOKEN) headers['Authorization'] = `Bearer ${GATEWAY_AUTH_TOKEN}`;
+
       for (const item of pendentes) {
         try {
           await axios.post(`${GATEWAY_URL}/subagent/spawn`, {
             prompt: item.prompt,
             context: { jid: item.jid, origem: 'offline_queue' }
-          });
+          }, { headers, timeout: 10000 });
           await sock.sendMessage(item.jid, { text: `[CORVO RECONECTADO] Processando comando que estava na fila offline: "${item.prompt}"` });
           db.markQueueProcessed(item.id);
         } catch (e) {
@@ -113,69 +117,210 @@ async function startWhatsApp() {
     if (!m.message || m.key.fromMe) return;
 
     const jid = m.key.remoteJid;
-    const text = m.message.conversation || m.message.extendedTextMessage?.text;
+    let text = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
+    let filePayload = null;
+    let isMedia = false;
 
-    if (text) {
-      console.log(`[MSG RECEBIDA] De ${jid}: ${text}`);
+    // Processamento Multimodal (Fotos, Áudios de Voz, Vídeos e Documentos no WhatsApp)
+    try {
+      if (m.message.imageMessage) {
+        text = text || m.message.imageMessage.caption || 'Analise esta imagem/foto recebida.';
+        const buffer = await downloadMediaMessage(m, 'buffer', {});
+        filePayload = {
+          data: buffer.toString('base64'),
+          type: m.message.imageMessage.mimetype || 'image/jpeg',
+          name: `img_${Date.now()}.jpg`
+        };
+        isMedia = true;
+      } else if (m.message.audioMessage) {
+        text = text || 'Ouça e responda a este áudio de voz recebido.';
+        const buffer = await downloadMediaMessage(m, 'buffer', {});
+        filePayload = {
+          data: buffer.toString('base64'),
+          type: m.message.audioMessage.mimetype || 'audio/ogg; codecs=opus',
+          name: `audio_${Date.now()}.ogg`
+        };
+        isMedia = true;
+      } else if (m.message.videoMessage) {
+        text = text || m.message.videoMessage.caption || 'Analise este vídeo recebido.';
+        const buffer = await downloadMediaMessage(m, 'buffer', {});
+        filePayload = {
+          data: buffer.toString('base64'),
+          type: m.message.videoMessage.mimetype || 'video/mp4',
+          name: `video_${Date.now()}.mp4`
+        };
+        isMedia = true;
+      } else if (m.message.documentMessage) {
+        text = text || m.message.documentMessage.caption || `Analise este documento (${m.message.documentMessage.fileName || 'arquivo'}).`;
+        const buffer = await downloadMediaMessage(m, 'buffer', {});
+        filePayload = {
+          data: buffer.toString('base64'),
+          type: m.message.documentMessage.mimetype || 'application/octet-stream',
+          name: m.message.documentMessage.fileName || 'documento'
+        };
+        isMedia = true;
+      }
+    } catch (mediaErr) {
+      console.warn('[WA MEDIA DOWNLOAD WARN]', mediaErr.message);
+    }
 
-      // Se a mensagem pedir áudio explícito ("fala", "em áudio", "manda áudio")
-      const querAudio = /(manda|envia|fala|grava|mande).*([áa]udio|voz)/i.test(text);
+    if (!text && !filePayload) return;
 
-      try {
-        const res = await axios.post(`${GATEWAY_URL}/subagent/spawn`, {
-          prompt: text,
-          context: { jid, sender: m.pushName || 'Usuário' },
-          timeout: 5000
+    const isGroup = jid.endsWith('@g.us');
+    const myJid = sock.user?.id ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : '';
+    const myPhone = sock.user?.id ? sock.user.id.split(':')[0].replace(/[^0-9]/g, '') : '';
+    const sender = m.key.participant || jid;
+    const isMarcos = sender.includes(MARCOS_PHONE);
+
+    // Regra anti-ruído: Em grupos, silêncio absoluto se estiver respondendo a outro bot ou se não for marcado
+    if (isGroup) {
+      const contextInfo = m.message.extendedTextMessage?.contextInfo;
+      const mentionedJid = contextInfo?.mentionedJid || [];
+      const quotedParticipant = contextInfo?.participant || '';
+
+      const isMentioned = (myJid && mentionedJid.includes(myJid)) ||
+                          (myPhone && text.includes(myPhone)) ||
+                          (new RegExp(`@${myPhone}`, 'i').test(text));
+
+      const isReplyingToMe = quotedParticipant && (quotedParticipant === myJid || (myPhone && quotedParticipant.includes(myPhone)));
+
+      // Se não foi marcada diretamente e não é resposta ao bot, FICA EM SILÊNCIO
+      if (!isMentioned && !isReplyingToMe) {
+        return;
+      }
+    }
+
+    console.log(`[MSG RECEBIDA] De ${jid} (${isMarcos ? 'MARCOS [DONO]' : 'USUÁRIO'}) [${isMedia ? 'MÍDIA' : 'TEXTO'}]: ${text.slice(0, 80)}`);
+
+    // Reage com emoji dinâmico à mensagem recebida
+    const emojis = ['🦅', '🔥', '⚡', '💀', '🧠', '🖤', '🎯', '👑', '😈', '🚀', '👀', '🫡', '💯', '👾', '😎', '✍️'];
+    const chosenEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+    try {
+      await sock.sendMessage(jid, { react: { text: chosenEmoji, key: m.key } });
+    } catch (e) {}
+
+    // Indicador de "digitando..." contínuo no WhatsApp
+    await sock.sendPresenceUpdate('composing', jid);
+    const typingTimer = setInterval(async () => {
+      try { await sock.sendPresenceUpdate('composing', jid); } catch (e) {}
+    }, 4500);
+
+    const querAudio = /(manda|envia|fala|grava|mande).*([áa]udio|voz)/i.test(text);
+    const isMission = !filePayload && /^(?:crie|criar|fa[çc]a|fazer|desenvolva|desenvolver|abra|abrir|navegue|navegar|baixe|baixar|download|instale|instalar|escaneie|escanear|scan|recon|audite|auditar|procure|buscar|busque|rode|rodar|execute|executar|edite|editar|programe|programar|suba|subir|monte|montar)\b/i.test(text.trim());
+
+    const headers = {};
+    if (GATEWAY_AUTH_TOKEN) headers['Authorization'] = `Bearer ${GATEWAY_AUTH_TOKEN}`;
+
+    try {
+      if (isMission) {
+        // Envia mensagem de estado ao vivo que vai sendo editada (estilo OpenClaw)
+        const statusMsg = await sock.sendMessage(jid, {
+          text: '⏳ *[Iniciando...]* Analisando objetivo e preparando arsenal...'
         });
 
-        const jobId = res.data.jobId;
-        await sock.sendMessage(jid, { text: `🦅 [CORVO] Ordem recebida. Subagente autônomo iniciado (ID: ${jobId}). Executando até o fim...` });
+        const autonomousLoop = require('../core/corvo_loop');
+        const missionId = `mission_${Date.now()}`;
 
-        // Polling inteligente até o subagente terminar de verdade
-        let tentativas = 0;
-        const maxTentativas = 30; // até 2.5 minutos de acompanhamento
-        const checkInterval = setInterval(async () => {
-          tentativas++;
-          try {
-            const check = await axios.get(`${GATEWAY_URL}/subagent/${jobId}`);
-            if (check.data && check.data.result) {
-              clearInterval(checkInterval);
-
-              const resposta = check.data.result;
-
-              // Envia texto solto (sem citação para o Marcos)
-              await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${resposta}` });
-
-              // Se pediu áudio, gera a voz ultra-realista e envia como mensagem de voz nativa (PTT)
-              if (querAudio) {
-                try {
-                  const voiceRes = await axios.post(`${GATEWAY_URL}/voice/generate`, { text: resposta.substring(0, 400) });
-                  if (voiceRes.data && voiceRes.data.filePath && fs.existsSync(voiceRes.data.filePath)) {
-                    const audioBuffer = fs.readFileSync(voiceRes.data.filePath);
-                    await sock.sendMessage(jid, {
-                      audio: audioBuffer,
-                      mimetype: 'audio/mp4',
-                      ptt: true // Envia como áudio gravado no WhatsApp
-                    });
-                  }
-                } catch (vErr) {
-                  console.error('[VOICE SEND ERROR]', vErr.message);
-                }
+        const missionRes = await autonomousLoop.runAutonomousMission(missionId, text, {
+          maxSteps: 25,
+          onProgress: async ({ step, maxSteps, description }) => {
+            try {
+              await sock.sendPresenceUpdate('composing', jid);
+              if (statusMsg && statusMsg.key) {
+                await sock.sendMessage(jid, {
+                  text: `⏳ *[Passo ${step}/${maxSteps}]* ${description}`,
+                  edit: statusMsg.key
+                });
               }
-
-            } else if (tentativas >= maxTentativas) {
-              clearInterval(checkInterval);
-            }
-          } catch (e) {
-            console.error('Erro no polling do subagente:', e.message);
+            } catch (pErr) {}
           }
-        }, 5000);
+        });
 
-      } catch (error) {
-        console.warn('[OFFLINE WARNING] Gateway indisponível ou sem internet. Salvando na fila offline do SQLite...');
-        db.addOfflineQueue(jid, text);
-        await sock.sendMessage(jid, { text: `[MODO OFFLINE] Sem conexão com o Daemon/Internet. Sua ordem foi salva na fila SQLite e será processada automaticamente assim que a conexão for restabelecida.` });
+        clearInterval(typingTimer);
+
+        // Apaga a mensagem de estado para manter o chat limpo
+        if (statusMsg && statusMsg.key) {
+          try {
+            await sock.sendMessage(jid, { delete: statusMsg.key });
+          } catch (delErr) {}
+        }
+
+        const finalReport = missionRes.report || (missionRes.success ? 'Missão concluída com sucesso!' : `Missão encerrada: ${missionRes.error}`);
+
+        // Envia resposta solta (sem reply) no WhatsApp
+        await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${finalReport}` });
+
+        // Se pediu áudio, gera a voz ultra-realista e envia como mensagem de voz nativa (PTT)
+        if (querAudio) {
+          try {
+            const voiceRes = await axios.post(`${GATEWAY_URL}/voice/generate`, { text: finalReport.substring(0, 400) }, { headers, timeout: 35000 });
+            if (voiceRes.data && voiceRes.data.filePath && fs.existsSync(voiceRes.data.filePath)) {
+              const audioBuffer = fs.readFileSync(voiceRes.data.filePath);
+              await sock.sendMessage(jid, {
+                audio: audioBuffer,
+                mimetype: 'audio/mp4',
+                ptt: true
+              });
+            }
+          } catch (vErr) {
+            console.error('[VOICE SEND ERROR]', vErr.message);
+          }
+        }
+
+        // Se houver screenshot capturado durante a missão, envia a foto
+        const shotsDir = path.resolve(__dirname, '../../data/browser_shots');
+        if (fs.existsSync(shotsDir)) {
+          const files = fs.readdirSync(shotsDir).map(f => ({
+            path: path.join(shotsDir, f),
+            time: fs.statSync(path.join(shotsDir, f)).mtimeMs
+          })).sort((a, b) => b.time - a.time);
+
+          if (files.length > 0 && (Date.now() - files[0].time) < 60000) {
+            const shotBuffer = fs.readFileSync(files[0].path);
+            await sock.sendMessage(jid, {
+              image: shotBuffer,
+              caption: '📸 Captura visual da missão'
+            });
+          }
+        }
+
+      } else {
+        // Envia direto ao Gateway /chat para resposta instantânea e multimodal
+        const chatRes = await axios.post(`${GATEWAY_URL}/chat`, {
+          message: text,
+          file: filePayload,
+          sender: isMarcos ? 'Marcos (DONO)' : (m.pushName || 'Usuário'),
+          isDono: isMarcos
+        }, { headers, timeout: 60000 });
+
+        clearInterval(typingTimer);
+
+        if (chatRes.data && chatRes.data.reply) {
+          const resposta = chatRes.data.reply;
+
+          // Envia mensagem solta (sem reply) no WhatsApp
+          await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${resposta}` });
+
+          // Se pediu áudio ou se o gateway gerou áudio
+          if (querAudio || chatRes.data.audioUrl) {
+            const audioFileName = path.basename(chatRes.data.audioUrl || '');
+            const audioFile = path.resolve(__dirname, '../../data/audio', audioFileName);
+            if (fs.existsSync(audioFile)) {
+              const audioBuffer = fs.readFileSync(audioFile);
+              await sock.sendMessage(jid, {
+                audio: audioBuffer,
+                mimetype: 'audio/mp4',
+                ptt: true // Envia como áudio gravado nativo no WhatsApp
+              });
+            }
+          }
+        }
       }
+    } catch (error) {
+      clearInterval(typingTimer);
+      console.warn('[OFFLINE WARNING] Gateway indisponível ou sem internet. Salvando na fila offline do SQLite...');
+      db.addOfflineQueue(jid, text);
+      await sock.sendMessage(jid, { text: `[MODO OFFLINE] Sem conexão com o Daemon/Internet. Sua ordem foi salva na fila SQLite e será processada automaticamente assim que a conexão for restabelecida.` });
     }
   });
 

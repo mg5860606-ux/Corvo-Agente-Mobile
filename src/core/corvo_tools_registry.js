@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const corvoBrowser = require('../modules/corvo_browser');
 
 const ROOT_DIR = path.resolve(__dirname, '../../');
 const TOOLS_CUSTOM_PATH = path.join(ROOT_DIR, 'skills', 'custom_tools.json');
@@ -189,21 +190,49 @@ const toolsRegistry = {
     }
   },
 
-  // 6. Criação de Ferramentas em Tempo Real (Tool Forge)
+  // 6. Criação de Ferramentas em Tempo Real (Tool Forge & Auto-Extensão)
   create_custom_tool: {
-    description: 'Cria e registra uma nova ferramenta/skill executável em tempo real no arsenal do agente.',
+    description: 'Cria, compila e registra uma nova ferramenta/função executável em tempo real no arsenal do agente para resolver qualquer missão onde falte ferramenta.',
     parameters: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'Nome identificador da ferramenta' },
-        description: { type: 'string', description: 'O que a ferramenta faz' },
+        name: { type: 'string', description: 'Nome identificador único da ferramenta (ex: consultar_api_pix)' },
+        description: { type: 'string', description: 'O que a ferramenta faz em detalhes' },
         parameters: { type: 'object', description: 'Schema de parâmetros JSON' },
-        js_code: { type: 'string', description: 'Código assíncrono JS que recebe (args) e retorna resultado' }
+        js_code: { type: 'string', description: 'Código assíncrono JS executável. Recebe args e tem acesso a axios, execSync, fs, path, ROOT_DIR e toolsRegistry. Deve retornar um objeto { success: true, ... }' }
       },
       required: ['name', 'description', 'js_code']
     },
     execute: async ({ name, description, parameters = {}, js_code }) => {
       try {
+        if (!name || !js_code) {
+          return { success: false, error: 'name e js_code são obrigatórios para criar ferramenta.' };
+        }
+
+        // Validação e compilação do código em tempo de execução
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        let compiledFn;
+        try {
+          compiledFn = new AsyncFunction('args', 'toolsRegistry', 'ROOT_DIR', 'axios', 'execSync', 'fs', 'path', js_code);
+        } catch (compileErr) {
+          return { success: false, error: `Erro de sintaxe no código JavaScript da ferramenta "${name}": ${compileErr.message}` };
+        }
+
+        // Injeta imediatamente no registro em memória (disponível no próximo passo sem reiniciar)
+        toolsRegistry[name] = {
+          description: description || `Ferramenta customizada ${name}`,
+          parameters: parameters || { type: 'object', properties: {} },
+          isCustom: true,
+          execute: async (args) => {
+            try {
+              return await compiledFn(args || {}, toolsRegistry, ROOT_DIR, axios, execSync, fs, path);
+            } catch (runErr) {
+              return { success: false, error: `Falha ao executar ferramenta customizada "${name}": ${runErr.message}` };
+            }
+          }
+        };
+
+        // Persiste no arquivo custom_tools.json
         let customTools = [];
         if (fs.existsSync(TOOLS_CUSTOM_PATH)) {
           try { customTools = JSON.parse(fs.readFileSync(TOOLS_CUSTOM_PATH, 'utf8')); } catch (e) { customTools = []; }
@@ -215,7 +244,8 @@ const toolsRegistry = {
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         fs.writeFileSync(TOOLS_CUSTOM_PATH, JSON.stringify(customTools, null, 2), 'utf8');
 
-        return { success: true, message: `Nova ferramenta "${name}" criada e registrada no arsenal.` };
+        console.log(`[TOOL FORGE] Ferramenta "${name}" criada e registrada no arsenal com sucesso!`);
+        return { success: true, message: `Ferramenta "${name}" criada, compilada e registrada com sucesso no arsenal! Pronta para uso imediato.` };
       } catch (e) {
         return { success: false, error: e.message };
       }
@@ -253,7 +283,142 @@ const toolsRegistry = {
         return { success: false, error: e.message };
       }
     }
+  },
+
+  // 8. Navegador Autônomo Web (Navegação Real, Cliques, Digitação, Downloads e Prints)
+  browser_navigate: {
+    description: 'Navega para qualquer site ou URL da internet usando o motor real do Chromium/Chrome/Edge e retorna os elementos clicáveis e print.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'URL para onde navegar (ex: https://github.com ou https://google.com)' }
+      },
+      required: ['url']
+    },
+    execute: async ({ url }) => {
+      return await corvoBrowser.navigate(url);
+    }
+  },
+
+  browser_click: {
+    description: 'Clica em qualquer botão, link, input ou elemento visível na página atual pelo texto do botão ou seletor CSS.',
+    parameters: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Texto visível do botão/link (ex: "Entrar", "Pesquisar") ou seletor CSS (ex: "button#submit")' }
+      },
+      required: ['target']
+    },
+    execute: async ({ target }) => {
+      return await corvoBrowser.click(target);
+    }
+  },
+
+  browser_type: {
+    description: 'Digita texto em campos de formulário, caixas de busca, login, senha ou áreas de texto.',
+    parameters: {
+      type: 'object',
+      properties: {
+        selector: { type: 'string', description: 'Nome do campo, placeholder, id ou seletor CSS (ex: "q", "email", "password")' },
+        text: { type: 'string', description: 'Texto a ser digitado' },
+        pressEnter: { type: 'boolean', description: 'Se true, aperta Enter após digitar' }
+      },
+      required: ['selector', 'text']
+    },
+    execute: async ({ selector, text, pressEnter = false }) => {
+      return await corvoBrowser.type(selector, text, { pressEnter });
+    }
+  },
+
+  browser_screenshot: {
+    description: 'Captura um print visual em alta resolução da página do navegador atual para ver o que está na tela.',
+    parameters: {
+      type: 'object',
+      properties: {
+        fullPage: { type: 'boolean', description: 'Se true, captura a página inteira' }
+      }
+    },
+    execute: async ({ fullPage = false } = {}) => {
+      return await corvoBrowser.screenshot({ fullPage });
+    }
+  },
+
+  browser_download: {
+    description: 'Baixa qualquer arquivo diretamente da internet para a pasta data/downloads.',
+    parameters: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Link direto do arquivo para download' },
+        filename: { type: 'string', description: 'Nome do arquivo de saída (opcional)' }
+      },
+      required: ['url']
+    },
+    execute: async ({ url, filename }) => {
+      return await corvoBrowser.download(url, { filename });
+    }
+  },
+
+  browser_eval: {
+    description: 'Executa qualquer script JavaScript dentro do contexto da página web atual.',
+    parameters: {
+      type: 'object',
+      properties: {
+        code: { type: 'string', description: 'Código JavaScript a ser executado na janela da página' }
+      },
+      required: ['code']
+    },
+    execute: async ({ code }) => {
+      return await corvoBrowser.evaluate(code);
+    }
   }
 };
+
+/**
+ * Carrega ferramentas personalizadas salvas dinamicamente pelo agente em skills/custom_tools.json
+ */
+function loadCustomTools() {
+  if (fs.existsSync(TOOLS_CUSTOM_PATH)) {
+    try {
+      const list = JSON.parse(fs.readFileSync(TOOLS_CUSTOM_PATH, 'utf8'));
+      if (Array.isArray(list)) {
+        const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+        for (const t of list) {
+          if (t.name && t.js_code && !toolsRegistry[t.name]) {
+            try {
+              const compiledFn = new AsyncFunction('args', 'toolsRegistry', 'ROOT_DIR', 'axios', 'execSync', 'fs', 'path', t.js_code);
+              toolsRegistry[t.name] = {
+                description: t.description || `Ferramenta customizada ${t.name}`,
+                parameters: t.parameters || { type: 'object', properties: {} },
+                isCustom: true,
+                execute: async (args) => {
+                  try {
+                    return await compiledFn(args || {}, toolsRegistry, ROOT_DIR, axios, execSync, fs, path);
+                  } catch (err) {
+                    return { success: false, error: `Falha ao executar "${t.name}": ${err.message}` };
+                  }
+                }
+              };
+            } catch (compileErr) {
+              console.warn(`[TOOL FORGE WARN] Sintaxe inválida ao restaurar "${t.name}":`, compileErr.message);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[TOOL FORGE] Falha ao carregar custom_tools.json:', err.message);
+    }
+  }
+}
+
+// Carrega ferramentas criadas dinamicamente na inicialização
+loadCustomTools();
+
+// Define loadCustomTools como propriedade não-enumerável para não poluir o catálogo de ferramentas
+Object.defineProperty(toolsRegistry, 'loadCustomTools', {
+  value: loadCustomTools,
+  enumerable: false,
+  writable: true,
+  configurable: true
+});
 
 module.exports = toolsRegistry;

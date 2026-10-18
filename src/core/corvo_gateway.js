@@ -10,6 +10,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
+const OpenAI = require('openai');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('./corvo_db');
 const sensors = require('../modules/corvo_sensors');
@@ -78,44 +79,48 @@ if (!fs.existsSync(SKILLS_DIR)) fs.mkdirSync(SKILLS_DIR, { recursive: true });
 const apiKey = process.env.GEMINI_API_KEY;
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// Modelos Suportados no Gateway (Estilo OpenClaw)
+// Configuração ISA Cloud / OmniRoute (IA Japa C:\xereca017)
+const isaBaseUrl = process.env.ISACLOUD_BASE_URL || process.env.OPENAI_BASE_URL || 'http://127.0.0.1:20129/v1';
+const isaApiKey = process.env.ISACLOUD_API_KEY || process.env.OPENAI_API_KEY || 'sk-aaaafd3c5b149509-76c532-c74703a0';
+const openaiClient = (isaBaseUrl && isaApiKey)
+  ? new OpenAI({ baseURL: isaBaseUrl, apiKey: isaApiKey })
+  : null;
+
+// Modelos Suportados no Gateway (Estilo OpenClaw & ISA Cloud)
 let AVAILABLE_MODELS = [
-  { id: 'gemini-flash-latest', name: 'Gemini Flash Latest (Rápido / Padrão)', type: 'cloud' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Multimodal)', type: 'cloud' },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Deep Reasoning)', type: 'cloud' },
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Next-Gen)', type: 'cloud' },
-  { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (Estável)', type: 'cloud' },
-  { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Avançado)', type: 'cloud' },
+  { id: 'isacloud/gemini-3.8-flash-high', name: 'ISA Cloud - Gemini 3.8 Flash High (Rápido / Apex)', type: 'cloud' },
+  { id: 'agy/gemini-3.8-flash-high', name: 'ISA Cloud - AGY Gemini 3.8 Flash High', type: 'cloud' },
+  { id: 'dual/gemini-3.8-flash-high', name: 'ISA Cloud - Dual Gemini 3.8 Flash High', type: 'cloud' },
+  { id: 'isacloud/gemini-3.8-flash-low', name: 'ISA Cloud - Gemini 3.8 Flash Low', type: 'cloud' },
+  { id: 'gemini-2.5-flash', name: 'ISA Cloud - Gemini 2.5 Flash', type: 'cloud' },
+  { id: 'gemini-flash-latest', name: 'Google Gemini Flash Latest (Fallback Direto)', type: 'cloud' },
   { id: 'qwen2.5-coder-7b-instruct', name: 'Qwen 2.5 Coder 7B (Llama.cpp Local)', type: 'local' }
 ];
 
-async function refreshModelsFromGoogle() {
-  const currentKey = process.env.GEMINI_API_KEY;
-  if (!currentKey) return;
+async function refreshModelsFromOmniRoute() {
+  if (!openaiClient) return;
   try {
-    const axios = require('axios');
-    const resp = await axios.get(`https://generativelanguage.googleapis.com/v1beta/models?key=${currentKey}`, { timeout: 8000 });
-    if (resp.data && Array.isArray(resp.data.models)) {
-      const live = resp.data.models
-        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
-        .map(m => {
-          const id = m.name.replace('models/', '');
-          return { id, name: `${m.displayName || id} (${id})`, type: 'cloud' };
-        });
-      if (live.length > 0) {
-        // Preserva o local
-        AVAILABLE_MODELS = [...live, { id: 'qwen2.5-coder-7b-instruct', name: 'Qwen 2.5 Coder 7B (Llama.cpp Local)', type: 'local' }];
-        console.log(`[MODELS] Sincronizados ${live.length} modelos dinâmicos da API Google Gemini.`);
-      }
+    const list = await openaiClient.models.list();
+    if (list && Array.isArray(list.data) && list.data.length > 0) {
+      const dynamicModels = list.data.map(m => ({
+        id: m.id,
+        name: `ISA Cloud - ${m.id}`,
+        type: 'cloud'
+      }));
+      AVAILABLE_MODELS = [
+        ...dynamicModels,
+        { id: 'gemini-flash-latest', name: 'Google Gemini Flash Latest (Fallback Direto)', type: 'cloud' },
+        { id: 'qwen2.5-coder-7b-instruct', name: 'Qwen 2.5 Coder 7B (Llama.cpp Local)', type: 'local' }
+      ];
+      console.log(`[MODELS] Sincronizados ${dynamicModels.length} modelos dinâmicos da ISA Cloud / OmniRoute.`);
     }
   } catch (err) {
-    // Mantém os modelos de fallback se a chave for inválida ou offline
-    console.warn('[MODELS] Usando lista de modelos padrão offline:', err.message);
+    console.warn('[MODELS] Falha ao sincronizar modelos da ISA Cloud:', err.message);
   }
 }
-refreshModelsFromGoogle();
+refreshModelsFromOmniRoute();
 
-let activeModelId = process.env.PRIMARY_MODEL || 'gemini-flash-latest';
+let activeModelId = process.env.PRIMARY_MODEL || 'isacloud/gemini-3.8-flash-high';
 const activeJobs = new Map();
 let whatsappProcess = null;
 let telegramRunning = false;
@@ -730,11 +735,10 @@ app.post('/chat', async (req, res) => {
   if (!message && !file) return res.status(400).json({ error: 'Mensagem ou arquivo vazio' });
 
   try {
-    if (!genAI) {
-      return res.json({ reply: 'GEMINI_API_KEY não configurada no servidor.' });
+    if (!openaiClient && !genAI) {
+      return res.json({ reply: 'Nenhum provedor de IA configurado no servidor (configure ISACLOUD ou GEMINI no .env).' });
     }
 
-    const model = genAI.getGenerativeModel({ model: activeModelId });
     const systemPrompt = fs.readFileSync(path.resolve(__dirname, '../../system.md'), 'utf8');
 
     // Recupera memórias e soluções comprovadas
@@ -848,8 +852,71 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
       }
     }
 
-    const response = await model.generateContent(contents);
-    const reply = response.response.text().trim();
+    let reply = '';
+    const candidateModels = [
+      activeModelId,
+      'agy/gemini-3.8-flash-high',
+      'dual/gemini-3.8-flash-high',
+      'agy/gemini-3.8-flash-low',
+      'isacloud/gemini-3.8-flash-high',
+      'gemini-2.5-flash'
+    ];
+
+    let userContent = message || 'Analise a mídia em anexo ou responda à ordem.';
+    if (file && file.data) {
+      if (file.type?.startsWith('image/')) {
+        userContent = [
+          { type: 'text', text: message || 'Analise esta foto/imagem com precisão e me responda com todos os detalhes técnicos.' },
+          { type: 'image_url', image_url: { url: `data:${file.type || 'image/jpeg'};base64,${file.data}` } }
+        ];
+      } else if (file.type?.startsWith('audio/')) {
+        const audioFormat = file.type.includes('wav') ? 'wav' : file.type.includes('mp3') ? 'mp3' : 'ogg';
+        userContent = [
+          { type: 'text', text: message || 'Ouça este áudio de voz, transcreva mentalmente e responda diretamente.' },
+          { type: 'input_audio', input_audio: { data: file.data, format: audioFormat } }
+        ];
+      }
+    }
+
+    if (openaiClient) {
+      let lastErr = null;
+      for (const mId of candidateModels) {
+        try {
+          const resAI = await openaiClient.chat.completions.create({
+            model: mId,
+            messages: [
+              { role: 'system', content: `${systemPrompt}${contextMemo}` },
+              { role: 'user', content: userContent }
+            ],
+            temperature: 0.3
+          });
+          reply = resAI.choices?.[0]?.message?.content?.trim() || '';
+          if (reply) {
+            lastErr = null;
+            break;
+          }
+        } catch (e) {
+          lastErr = e;
+          console.warn(`[CHAT API WARN] Modelo ${mId} na ISA Cloud falhou (${e.message}), tentando próximo...`);
+        }
+      }
+
+      if (!reply && genAI) {
+        try {
+          const fbModel = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+          const fallbackResp = await fbModel.generateContent(contents);
+          reply = fallbackResp.response.text().trim();
+        } catch (fbErr) {
+          throw new Error(`ISA Cloud erro: ${lastErr?.message} | Google fallback: ${fbErr.message}`);
+        }
+      } else if (!reply && lastErr) {
+        throw lastErr;
+      }
+    } else if (genAI) {
+      const fbModel = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+      const fallbackResp = await fbModel.generateContent(contents);
+      reply = fallbackResp.response.text().trim();
+    }
 
     // Registra no banco
     db.logChat('gateway_web', 'Marcos', message || '[Mídia enviada]', reply);

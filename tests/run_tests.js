@@ -61,6 +61,7 @@ const jsFiles = [
   'src/modules/corvo_sensors.js',
   'src/modules/corvo_god_mode.js',
   'src/modules/corvo_self_coding.js',
+  'src/modules/corvo_browser.js',
 ];
 
 for (const file of jsFiles) {
