@@ -160,20 +160,50 @@ npm test
 
 ## 📱 Execução no Android (Termux)
 
-Para rodar no celular via Termux:
+### ⚠️ Qual versão do Termux utilizar?
+
+> [!CAUTION]
+> **NUNCA utilize a versão do Termux da Google Play Store!**  
+> A versão da Play Store foi abandonada e descontinuada devido a restrições do Google Android, resultando em repositórios quebrados (`404 Not Found`), erros de SSL e impossibilidade de atualizar pacotes ou acessar a API de hardware.
+
+**Instale sempre uma das versões oficiais mantidas:**
+1. **GitHub Oficial (Recomendado):** Baixe o APK mais recente na página de releases: [Termux Releases no GitHub](https://github.com/termux/termux-app/releases) (escolha a arquitetura do seu celular, normalmente `termux-app_..._arm64-v8a.apk` ou `universal.apk`).
+2. **F-Droid:** Baixe através da loja aberta [F-Droid - Termux](https://f-droid.org/packages/com.termux/).
+
+*(Opcional para telemetria de bateria/hardware)*: Instale também o APK do **Termux:API** disponível no [GitHub Releases do Termux:API](https://github.com/termux/termux-api/releases) ou no F-Droid.
+
+---
+
+### 🚀 Passo a Passo de Instalação no Termux
+
+Abra o Termux instalado e execute os comandos:
 
 ```bash
-# Instalar dependências básicas
-pkg update && pkg install -y git nodejs-lts python
+# 1. Atualizar os repositórios oficiais e pacotes
+pkg update && pkg upgrade -y
 
-# Acessar a pasta e instalar dependências do projeto
+# 2. Instalar Git, Node.js LTS, Python e Termux API
+pkg install -y git nodejs-lts python termux-api
+
+# 3. Conceder permissão de armazenamento do celular
+termux-setup-storage
+
+# 4. Clonar o repositório do Corvo Agente Mobile
+git clone https://github.com/mg5860606-ux/Corvo-Agente-Mobile.git
+cd Corvo-Agente-Mobile
+
+# 5. Instalar as dependências do ecossistema
 npm install
 
-# Iniciar o sistema
+# 6. Configurar o arquivo .env
+cp .env.example .env
+nano .env  # (ou use 'cat <<EOF > .env' com suas chaves)
+
+# 7. Iniciar o sistema completo
 npm start
 ```
 
-> 🔒 O sistema conta com ativação automática do **Termux Wake-Lock** para impedir que o sistema operacional Android suspenda o processo em segundo plano.
+> 🔒 **Blindagem contra Doze Mode:** O Corvo ativa o `termux-wake-lock` automaticamente ao iniciar, mantendo o agente e os bots do Telegram/WhatsApp rodando mesmo com a tela do celular apagada ou bloqueada.
 
 ---
 
