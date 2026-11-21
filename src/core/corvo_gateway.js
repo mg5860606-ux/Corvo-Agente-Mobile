@@ -760,7 +760,7 @@ async function callPollinationsAI(promptText, systemPromptText = '') {
         'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
-      timeout: 15000
+      timeout: 8000
     });
     const reply = res.data?.choices?.[0]?.message?.content?.trim();
     if (reply) return reply;
@@ -771,8 +771,6 @@ async function callPollinationsAI(promptText, systemPromptText = '') {
 }
 
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
-  if (!apiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
-  
   // Extrai o texto do prompt
   let promptText = '';
   if (Array.isArray(contentsPrompt)) {
@@ -783,66 +781,35 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
     promptText = JSON.stringify(contentsPrompt);
   }
 
-  // 1. TENTATIVA PRIORITÁRIA: NOVA INTERACTIONS API (Gemini 3.8 Flash & Chaves AQ)
-  try {
-    const interactionRes = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', {
-      model: 'gemini-3.8-flash',
-      input: promptText
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      timeout: 30000
-    });
+  const isRealApiKey = apiKey && apiKey.startsWith('AIzaSy');
 
-    if (interactionRes.data) {
-      const out = interactionRes.data.outputs?.[0]?.text || 
-                  interactionRes.data.output || 
-                  interactionRes.data.result || 
-                  (typeof interactionRes.data === 'string' ? interactionRes.data : '');
-      if (out && typeof out === 'string' && out.trim()) {
-        return out.trim();
-      }
+  // 1. TENTATIVA RÁPIDA: Se tiver chave AIzaSy real, bate no Gemini oficial com timeout curto (7s)
+  if (isRealApiKey && genAI) {
+    try {
+      const modelInstance = genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        systemInstruction: systemPromptText ? { parts: [{ text: systemPromptText }] } : undefined
+      });
+      const res = await Promise.race([
+        modelInstance.generateContent(contentsPrompt),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GEMINI')), 7000))
+      ]);
+      const text = res.response.text();
+      if (text && text.trim()) return text.trim();
+    } catch (err) {
+      console.warn('[GEMINI FAST WARN]:', err.message);
     }
-  } catch (interErr) {
-    console.warn('[INTERACTIONS API WARN]:', interErr.response?.data?.error?.message || interErr.message);
   }
 
-  // 2. FALLBACK: GENERATE CONTENT SDK (Modelos Pro / Flash)
-  if (genAI) {
-    let lastErr = null;
-    for (const modName of GOOGLE_FALLBACK_MODELS) {
-      try {
-        const modelInstance = genAI.getGenerativeModel({
-          model: modName,
-          systemInstruction: systemPromptText ? { parts: [{ text: systemPromptText }] } : undefined
-        });
-        const res = await modelInstance.generateContent(contentsPrompt);
-        const text = res.response.text();
-        if (text) {
-          GEMINI_MODEL = modName;
-          return text.trim();
-        }
-      } catch (err) {
-        lastErr = err;
-        console.warn(`[GEMINI MODEL WARN] Modelo ${modName} falhou: ${err.message}, tentando fallback...`);
-        continue;
-      }
-    }
-    if (lastErr) throw lastErr;
-  }
-
-  // 3. FALLBACK INFALÍVEL ZERO-KEY (Garante que o bot NUNCA fica mudo se a chave da Google der 401/400)
+  // 2. ROTA INSTANTÂNEA UNIVERSAL (Sem espera de 30s de cascade)
   try {
-    console.log('[FALLBACK APEX] Acionando rota universal resiliente...');
     const polReply = await callPollinationsAI(promptText, systemPromptText);
     if (polReply) return polReply;
   } catch (e) {
     console.warn('[FALLBACK APEX ERROR]:', e.message);
   }
 
-  throw new Error('Não foi possível obter resposta do Gemini em nenhum endpoint.');
+  return 'Opa, tô online.';
 }
 
 app.post('/chat', async (req, res) => {
