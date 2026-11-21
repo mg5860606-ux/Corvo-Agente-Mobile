@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 
-const repoDir = path.resolve(__dirname);
+const repoDir = path.resolve(__dirname, '../../');
 const envPath = path.join(repoDir, '.env');
 const envExamplePath = path.join(repoDir, '.env.example');
 
@@ -12,7 +12,7 @@ function askQuestion(rl, query) {
 
 async function checkAndConfigureEnv() {
   let envContent = '';
-  let exists = fs.existsSync(envPath);
+  const exists = fs.existsSync(envPath);
 
   if (exists) {
     envContent = fs.readFileSync(envPath, 'utf8');
@@ -20,12 +20,13 @@ async function checkAndConfigureEnv() {
     envContent = fs.readFileSync(envExamplePath, 'utf8');
   }
 
-  // Verifica se já tem chave válida do Gemini configurada
-  const hasGeminiKey = envContent.includes('GEMINI_API_KEY=') && 
-                       !envContent.includes('GEMINI_API_KEY=sua_chave') &&
-                       !envContent.includes('GEMINI_API_KEY=');
+  // Verifica se já tem chave válida do Gemini configurada (não vazia e não placeholder)
+  const hasGeminiKey = envContent.includes('GEMINI_API_KEY=') &&
+    !envContent.includes('GEMINI_API_KEY=sua_chave') &&
+    !envContent.includes('GEMINI_API_KEY=***') &&
+    /GEMINI_API_KEY=[A-Za-z0-9_\-\.]{15,}/.test(envContent);
 
-  // Se já tiver chave configurada ou se estiver rodando em ambiente não interativo
+  // Se já tiver chave configurada ou se não for terminal interativo, passa batido sem incomodar
   if (hasGeminiKey || !process.stdin.isTTY) {
     if (!exists && fs.existsSync(envExamplePath)) {
       fs.copyFileSync(envExamplePath, envPath);
@@ -34,19 +35,18 @@ async function checkAndConfigureEnv() {
   }
 
   console.log('\n======================================================');
-  console.log('  🦅 BEM-VINDO AO CORVO AGENTE MOBILE // SETUP RÁPIDO');
+  console.log('  🦅 BEM-VINDO AO CORVO / ÍNDIA AGENTE MOBILE');
   console.log('======================================================');
-  console.log(' Parece que é a sua primeira vez iniciando o agente!');
-  console.log(' Vamos configurar as informações básicas para rodar liso.\n');
-  console.log(' 1. Inteligência Grátis (Google Studio):');
+  console.log(' Configuração rápida inicial para rodar liso no celular:\n');
+  console.log(' 1. Inteligência Grátis (Google AI Studio):');
   console.log('    👉 Pegue grátis em: https://aistudio.google.com/\n');
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  
+
   const geminiKey = await askQuestion(rl, ' 🔑 Cole sua chave GEMINI_API_KEY: ');
 
   console.log('\n 2. Bot do Telegram (Opcional - aperte Enter para pular):');
-  console.log('    👉 Crie um bot no @BotFather para pegar o Token e pegue seu ID no @userinfobot\n');
+  console.log('    👉 Crie no @BotFather e pegue seu ID no @userinfobot\n');
   const tgToken = await askQuestion(rl, ' 🤖 Token do Bot Telegram (ou Enter): ');
   let tgOwnerId = '';
   if (tgToken) {
@@ -54,54 +54,42 @@ async function checkAndConfigureEnv() {
   }
 
   console.log('\n 3. WhatsApp do Dono (Opcional - aperte Enter para pular):');
-  console.log('    Exemplo com DDI e DDD: 5511999999999\n');
-  const waPhone = await askQuestion(rl, ' 📱 Seu número de WhatsApp (ou Enter): ');
+  const waPhone = await askQuestion(rl, ' 📱 Seu número com DDD (ex: 5511999999999): ');
 
   if (!exists && fs.existsSync(envExamplePath)) {
     envContent = fs.readFileSync(envExamplePath, 'utf8');
   }
 
-  // Atualiza ou injeta Gemini
-  if (geminiKey) {
-    if (envContent.includes('GEMINI_API_KEY=')) {
-      envContent = envContent.replace(/GEMINI_API_KEY=.*/, `GEMINI_API_KEY=${geminiKey}`);
-    } else {
-      envContent += `\nGEMINI_API_KEY=${geminiKey}\n`;
-    }
+  // Atualiza ou injeta configurações de forma limpa sem quebras de linha Windows (\r)
+  const cleanKey = geminiKey.replace(/[\r\n\t ]/g, '');
+  const cleanTg = tgToken.replace(/[\r\n\t ]/g, '');
+  const cleanOwner = tgOwnerId.replace(/\D/g, '');
+  const cleanPhone = waPhone.replace(/\D/g, '');
+
+  let lines = envContent.split(/\r?\n/).filter(Boolean);
+  const setVal = (k, v) => {
+    lines = lines.filter(l => !l.startsWith(`${k}=`));
+    lines.push(`${k}=${v}`);
+  };
+
+  if (cleanKey) setVal('GEMINI_API_KEY', cleanKey);
+  setVal('PRIMARY_PROVIDER', 'gemini');
+  setVal('GEMINI_MODEL', 'gemini-2.0-flash');
+  setVal('PORT', '3333');
+
+  if (cleanTg) setVal('TELEGRAM_BOT_TOKEN', cleanTg);
+  if (cleanOwner) {
+    setVal('MARCOS_TELEGRAM_ID', cleanOwner);
+    setVal('OWNER_TELEGRAM_ID', cleanOwner);
+  }
+  if (cleanPhone) {
+    setVal('MARCOS_WHATSAPP_PHONE', cleanPhone);
+    setVal('WHATSAPP_PAIRING_NUMBER', cleanPhone);
   }
 
-  // Atualiza Telegram
-  if (tgToken) {
-    if (envContent.includes('TELEGRAM_BOT_TOKEN=')) {
-      envContent = envContent.replace(/TELEGRAM_BOT_TOKEN=.*/, `TELEGRAM_BOT_TOKEN=${tgToken}`);
-    } else {
-      envContent += `\nTELEGRAM_BOT_TOKEN=${tgToken}\n`;
-    }
-  }
-  if (tgOwnerId) {
-    if (envContent.includes('MARCOS_TELEGRAM_ID=')) {
-      envContent = envContent.replace(/MARCOS_TELEGRAM_ID=.*/, `MARCOS_TELEGRAM_ID=${tgOwnerId}`);
-    } else {
-      envContent += `\nMARCOS_TELEGRAM_ID=${tgOwnerId}\n`;
-    }
-  }
-
-  // Atualiza WhatsApp
-  if (waPhone) {
-    const cleanPhone = waPhone.replace(/\D/g, '');
-    if (envContent.includes('MARCOS_WHATSAPP_PHONE=')) {
-      envContent = envContent.replace(/MARCOS_WHATSAPP_PHONE=.*/, `MARCOS_WHATSAPP_PHONE=${cleanPhone}`);
-    } else {
-      envContent += `\nMARCOS_WHATSAPP_PHONE=${cleanPhone}\n`;
-    }
-    if (envContent.includes('WHATSAPP_PAIRING_NUMBER=')) {
-      envContent = envContent.replace(/WHATSAPP_PAIRING_NUMBER=.*/, `WHATSAPP_PAIRING_NUMBER=${cleanPhone}`);
-    }
-  }
-
-  fs.writeFileSync(envPath, envContent, 'utf8');
-  console.log('\n ✅ Configurações salvas no seu .env com sucesso!');
-  console.log(' 🚀 Iniciando os serviços do agente...\n');
+  fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
+  console.log('\n ✅ Configurações gravadas com sucesso no .env!');
+  console.log(' 🚀 Iniciando os serviços...\n');
 
   rl.close();
   return true;

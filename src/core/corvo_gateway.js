@@ -76,15 +76,28 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(AUDIO_DIR)) fs.mkdirSync(AUDIO_DIR, { recursive: true });
 if (!fs.existsSync(SKILLS_DIR)) fs.mkdirSync(SKILLS_DIR, { recursive: true });
 
-const apiKey = process.env.GEMINI_API_KEY;
+// ================= MOTOR DE IA MULTI-PROVEDOR ROBUSTO =================
+const apiKey = (process.env.GEMINI_API_KEY || '').trim();
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// Configuração ISA Cloud / OmniRoute (IA Japa C:\xereca017)
-const isaBaseUrl = process.env.ISACLOUD_BASE_URL || process.env.OPENAI_BASE_URL || 'http://127.0.0.1:20129/v1';
-const isaApiKey = process.env.ISACLOUD_API_KEY || process.env.OPENAI_API_KEY || 'sk-aaaafd3c5b149509-76c532-c74703a0';
+// Configuração ISA Cloud / OmniRoute (Opcional - só ativa se explicitamente configurada e não vazia)
+const isaBaseUrl = (process.env.ISACLOUD_BASE_URL || process.env.OPENAI_BASE_URL || '').trim();
+const isaApiKey = (process.env.ISACLOUD_API_KEY || process.env.OPENAI_API_KEY || '').trim();
 const openaiClient = (isaBaseUrl && isaApiKey)
   ? new OpenAI({ baseURL: isaBaseUrl, apiKey: isaApiKey })
   : null;
+
+const PRIMARY_PROVIDER = (process.env.PRIMARY_PROVIDER || (openaiClient ? 'isacloud' : 'gemini')).toLowerCase();
+let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-2.0-flash').trim();
+
+// Lista de modelos resilientes do Google Gemini (se o usuário tiver conta recente ou antiga)
+const GOOGLE_FALLBACK_MODELS = [
+  GEMINI_MODEL,
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-pro'
+].filter((v, i, a) => v && a.indexOf(v) === i);
 
 // Modelos Suportados no Gateway (Estilo OpenClaw & ISA Cloud)
 let AVAILABLE_MODELS = [
@@ -730,6 +743,37 @@ app.get('/models', async (req, res) => {
 });
 
 // Endpoint conversacional robusto com Multimodal (Texto, Fotos, Áudios, Vídeos)
+
+async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
+  if (!genAI) throw new Error('GEMINI_API_KEY não configurada no .env');
+  
+  let lastErr = null;
+  for (const modName of GOOGLE_FALLBACK_MODELS) {
+    try {
+      const modelInstance = genAI.getGenerativeModel({
+        model: modName,
+        systemInstruction: systemPromptText ? { parts: [{ text: systemPromptText }] } : undefined
+      });
+      const res = await modelInstance.generateContent(contentsPrompt);
+      const text = res.response.text();
+      if (text) {
+        GEMINI_MODEL = modName; // Registra o modelo que funcionou
+        return text.trim();
+      }
+    } catch (err) {
+      lastErr = err;
+      // Se for erro de modelo não encontrado (404), tenta o próximo da lista de fallbacks
+      if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('is not supported'))) {
+        console.warn(`[GEMINI FALLBACK] Modelo "${modName}" não suportado nesta conta/chave, tentando próximo...`);
+        continue;
+      }
+      // Se for erro 400 de chave inválida ou outro erro fatal, propaga
+      throw err;
+    }
+  }
+  throw lastErr || new Error('Nenhum modelo Gemini compatível respondeu.');
+}
+
 app.post('/chat', async (req, res) => {
   const { message, file, chatId, sender, isDono } = req.body;
   if (!message && !file) return res.status(400).json({ error: 'Mensagem ou arquivo vazio' });
@@ -856,60 +900,58 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
     }
 
     let reply = '';
-    const candidateModels = [
-      activeModelId,
-      'agy/gemini-3.8-flash-high',
-      'dual/gemini-3.8-flash-high',
-      'agy/gemini-3.8-flash-low',
-      'isacloud/gemini-3.8-flash-high',
-      'gemini-2.5-flash'
-    ];
-
-    let userContent = message || 'Analise a mídia em anexo ou responda à ordem.';
-    if (file && file.data) {
-      if (file.type?.startsWith('image/')) {
-        userContent = [
-          { type: 'text', text: message || 'Analise esta foto/imagem com precisão e me responda com todos os detalhes técnicos.' },
-          { type: 'image_url', image_url: { url: `data:${file.type || 'image/jpeg'};base64,${file.data}` } }
-        ];
-      } else if (file.type?.startsWith('audio/')) {
-        const audioFormat = file.type.includes('wav') ? 'wav' : file.type.includes('mp3') ? 'mp3' : 'ogg';
-        userContent = [
-          { type: 'text', text: message || 'Ouça este áudio de voz, transcreva mentalmente e responda diretamente.' },
-          { type: 'input_audio', input_audio: { data: file.data, format: audioFormat } }
-        ];
+    
+    // Se o provedor primário for Gemini OU se não tiver ISA Cloud configurada
+    if (PRIMARY_PROVIDER === 'gemini' || !openaiClient) {
+      if (genAI) {
+        try {
+          reply = await callGeminiDirect(contents, systemPrompt);
+        } catch (gemErr) {
+          console.error('[GEMINI CHAT ERROR]:', gemErr.message);
+          throw gemErr;
+        }
+      } else {
+        throw new Error('Nenhum provedor de IA ativo. Configure GEMINI_API_KEY no .env!');
       }
-    }
-
-    if (openaiClient) {
+    } else if (openaiClient) {
+      // ISA Cloud / OmniRoute ativo
+      const candidateModels = [
+        activeModelId,
+        'agy/gemini-3.8-flash-high',
+        'dual/gemini-3.8-flash-high',
+        'isacloud/gemini-3.8-flash-high',
+        'gemini-2.5-flash'
+      ];
       let lastErr = null;
       for (const mId of candidateModels) {
         try {
           const resAI = await openaiClient.chat.completions.create({
             model: mId,
             messages: [
-              { role: 'system', content: `${systemPrompt}${groupContext}${contextMemo}` },
+              { role: 'system', content: systemPrompt },
               { role: 'user', content: userContent }
             ],
-            temperature: 0.3
+            temperature: 0.7,
+            max_tokens: 1500
           });
           reply = resAI.choices?.[0]?.message?.content?.trim() || '';
-          if (reply) {
-            lastErr = null;
-            break;
-          }
+          if (reply) { lastErr = null; break; }
         } catch (e) {
           lastErr = e;
           console.warn(`[CHAT API WARN] Modelo ${mId} na ISA Cloud falhou (${e.message}), tentando próximo...`);
         }
       }
-
       if (!reply && genAI) {
         try {
-          const fbModel = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-          const fallbackResp = await fbModel.generateContent(contents);
-          reply = fallbackResp.response.text().trim();
+          console.log('[CHAT API] ISA Cloud indisponível, usando fallback direto no Google Gemini...');
+          reply = await callGeminiDirect(contents, systemPrompt);
         } catch (fbErr) {
+          throw new Error(`ISA Cloud erro: ${lastErr?.message} | Google fallback: ${fbErr.message}`);
+        }
+      } else if (!reply && lastErr) {
+        throw lastErr;
+      }
+    } catch (fbErr) {
           throw new Error(`ISA Cloud erro: ${lastErr?.message} | Google fallback: ${fbErr.message}`);
         }
       } else if (!reply && lastErr) {
