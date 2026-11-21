@@ -748,12 +748,33 @@ app.get('/models', async (req, res) => {
 
 
 async function callPollinationsAI(promptText, systemPromptText = '') {
+  // 1. Tentativa via GET limpo (o mais rápido e estável do Pollinations)
   try {
-    const res = await axios.post('https://text.pollinations.ai/openai/chat/completions', {
+    const cleanUser = typeof promptText === 'string' ? promptText : JSON.stringify(promptText);
+    const shortPrompt = cleanUser.slice(0, 1500);
+    const url = `https://text.pollinations.ai/${encodeURIComponent(shortPrompt)}?model=openai&system=${encodeURIComponent('Você é a Índia, assistente inteligente e direta do Marcos. Responda em português brasileiro de forma natural e sem clichês.')}`;
+    
+    const res = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      timeout: 10000
+    });
+
+    if (res.data && typeof res.data === 'string' && res.data.trim()) {
+      return res.data.trim();
+    }
+  } catch (err) {
+    console.warn('[POLLINATIONS GET WARN]:', err.message);
+  }
+
+  // 2. Tentativa via POST chat completions
+  try {
+    const resPost = await axios.post('https://text.pollinations.ai/openai/chat/completions', {
       model: 'openai',
       messages: [
-        { role: 'system', content: systemPromptText || 'Você é a Índia, uma inteligência autônoma hacker, criada pelo Marcos (Corvo). Responda sempre em português brasileiro de forma direta, inteligente, natural e útil.' },
-        { role: 'user', content: promptText }
+        { role: 'system', content: 'Você é a Índia, uma inteligência direta e parceira do Marcos. Responda com naturalidade em português.' },
+        { role: 'user', content: typeof promptText === 'string' ? promptText : JSON.stringify(promptText) }
       ],
       temperature: 0.7
     }, {
@@ -763,25 +784,34 @@ async function callPollinationsAI(promptText, systemPromptText = '') {
       },
       timeout: 12000
     });
-    const reply = res.data?.choices?.[0]?.message?.content?.trim();
+
+    const reply = resPost.data?.choices?.[0]?.message?.content?.trim();
     if (reply) return reply;
   } catch (err) {
-    console.warn('[POLLINATIONS WARN]:', err.message);
+    console.warn('[POLLINATIONS POST WARN]:', err.message);
   }
+
   return null;
 }
 
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
   let promptText = '';
   if (Array.isArray(contentsPrompt)) {
-    promptText = contentsPrompt.map(c => typeof c === 'string' ? c : (c.text || '')).filter(Boolean).join('\n\n');
+    // Pega a mensagem real do usuário
+    const userPart = contentsPrompt.find(c => typeof c === 'string' && c.includes('Usuário (Marcos):'));
+    if (userPart) {
+      const match = userPart.match(/Usuário \(Marcos\):\s*"([^"]+)"/);
+      promptText = match ? match[1] : userPart;
+    } else {
+      promptText = contentsPrompt.map(c => typeof c === 'string' ? c : (c.text || '')).filter(Boolean).join('\n');
+    }
   } else if (typeof contentsPrompt === 'string') {
     promptText = contentsPrompt;
   } else {
     promptText = JSON.stringify(contentsPrompt);
   }
 
-  // Se tiver genAI configurado e chave real do Google AI Studio (AIzaSy)
+  // 1. Google AI Studio (se chave for válida AIzaSy)
   if (genAI && apiKey && apiKey.startsWith('AIzaSy')) {
     for (const mod of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest']) {
       try {
@@ -801,22 +831,23 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
     }
   }
 
-  // Rota Universal Inteligente (Pollinations / Open Engine)
+  // 2. Rota Universal (Pollinations GET & POST)
   const polReply = await callPollinationsAI(promptText, systemPromptText);
   if (polReply) return polReply;
 
-  // Fallback secundário
-  try {
-    const resBackup = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(promptText)}?model=openai&system=${encodeURIComponent(systemPromptText || 'Você é a Índia')}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      timeout: 10000
-    });
-    if (resBackup.data && typeof resBackup.data === 'string' && resBackup.data.trim()) {
-      return resBackup.data.trim();
-    }
-  } catch (e) {}
+  // 3. Respostas contextuais se a rede falhar de vez
+  const lower = (promptText || '').toLowerCase();
+  if (lower.includes('tudo bem') || lower.includes('como você tá') || lower.includes('voce ta bem')) {
+    return 'Tudo em paz por aqui, Marcos. E contigo?';
+  }
+  if (lower.includes('oque ta fazendo') || lower.includes('que ta fazendo') || lower.includes('fazendo o que')) {
+    return 'Monitorando o sistema e pronta pra agir. O que manda?';
+  }
+  if (lower.includes('que dia') || lower.includes('que horas')) {
+    return `Hoje é ${new Date().toLocaleDateString('pt-BR')}, ${new Date().toLocaleTimeString('pt-BR')}.`;
+  }
 
-  return 'Tô na escuta. Manda o comando.';
+  return 'Tranquilo por aqui. O que você precisa rodar?';
 }
 
 app.post('/chat', async (req, res) => {
