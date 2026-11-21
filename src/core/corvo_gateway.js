@@ -88,7 +88,7 @@ const openaiClient = (isaBaseUrl && isaApiKey)
   : null;
 
 const PRIMARY_PROVIDER = (process.env.PRIMARY_PROVIDER || (openaiClient ? 'isacloud' : 'gemini')).toLowerCase();
-let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-2.0-flash').trim();
+let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-2.5-pro').trim();
 
 // Lista de modelos resilientes do Google Gemini (se o usuário tiver conta recente ou antiga)
 const GOOGLE_FALLBACK_MODELS = [
