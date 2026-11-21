@@ -1,3 +1,12 @@
+
+function sanitizeAssistantReply(text) {
+  if (!text) return '';
+  // Remove monólogo interno <thought>...</thought>
+  let clean = text.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim();
+  // Se a IA decidiu ficar em silêncio
+  if (clean === 'NO_REPLY' || clean === 'NO_REPLY.') return '';
+  return clean;
+}
 /**
  * ✈️ CORVO AGENTE MOBILE - CANAL TELEGRAM NATIVO
  * Conexão direta com o Telegram Bot API sem depender de pacotes externos pesados (usa axios).
@@ -365,7 +374,7 @@ async function startPolling() {
                   if (vRes.success) {
                     await sendVoice(chatId, vRes.filePath, `🦅 Corvo Agente`);
                   } else {
-                    await sendMessage(chatId, `🦅 <b>Corvo Agente</b>:\n\n${finalReport}`, replyId);
+                    if (finalReport) await sendMessage(chatId, finalReport, replyId);
                   }
                 } else {
                   await sendMessage(chatId, `🦅 <b>Corvo Agente</b>:\n\n${finalReport}`, replyId);
@@ -407,7 +416,8 @@ async function startPolling() {
                     await sendVoice(chatId, audioFile, `🦅 Corvo Agente`);
                   } else {
                     const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
-                    await sendMessage(chatId, `🦅 <b>Corvo Agente</b>:\n\n${chatRes.data.reply}`, replyId);
+                    const rep = sanitizeAssistantReply(chatRes.data.reply);
+                    if (rep) await sendMessage(chatId, rep, replyId);
                   }
                 }
               }

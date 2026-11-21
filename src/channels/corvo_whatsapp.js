@@ -1,3 +1,10 @@
+
+function sanitizeAssistantReply(text) {
+  if (!text) return '';
+  let clean = text.replace(/<thought>[\s\S]*?<\/thought>/gi, '').trim();
+  if (clean === 'NO_REPLY' || clean === 'NO_REPLY.') return '';
+  return clean;
+}
 /**
  * 🦅 CORVO AGENTE MOBILE - CLIENTE WHATSAPP INTEGRADO AO GATEWAY (COM FILA OFFLINE & ÁUDIO REALISTA)
  */
@@ -357,7 +364,8 @@ async function startWhatsApp() {
           const resposta = chatRes.data.reply;
 
           // Envia mensagem solta (sem reply) no WhatsApp
-          await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${resposta}` });
+          const rep = sanitizeAssistantReply(resposta);
+          if (rep) await sock.sendMessage(jid, { text: rep });
 
           // Se pediu áudio ou se o gateway gerou áudio
           if (querAudio || chatRes.data.audioUrl) {
