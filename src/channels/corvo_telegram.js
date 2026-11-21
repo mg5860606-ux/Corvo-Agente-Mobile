@@ -23,7 +23,7 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
 const API_URL = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : '';
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:3333';
 const GATEWAY_AUTH_TOKEN = process.env.GATEWAY_AUTH_TOKEN || '';
-const MARCOS_TG_ID = String(process.env.MARCOS_TELEGRAM_ID || process.env.OWNER_TELEGRAM_ID || '8273924319');
+const OWNER_TG_ID = String(process.env.OWNER_TELEGRAM_ID || process.env.MARCOS_TELEGRAM_ID || '').trim();
 
 let isRunning = false;
 let lastUpdateId = 0;
@@ -238,7 +238,7 @@ async function startPolling() {
             const senderId = String(msg.from.id);
             const chatId = msg.chat.id;
             const chatType = msg.chat.type; // 'private', 'group', 'supergroup', 'channel'
-            const isDono = senderId === MARCOS_TG_ID;
+            const isDono = OWNER_TG_ID ? (senderId === OWNER_TG_ID) : (senderId === '8273924319');
             const cleanText = text.trim();
 
             // Grava no buffer de contexto contínuo do grupo/chat (Estilo OpenClaw)
@@ -256,10 +256,12 @@ async function startPolling() {
               }
             }
 
-                        // Trava de Privado: no PV só responde se for o dono (ID configurado)
-            if (chatType === 'private' && !isDono) {
-              console.log(`[TG SILENCE PV] Mensagem no privado de usuário não autorizado (${senderId}). Ignorando.`);
-              continue;
+                        // Trava de Privado: no PV só responde se for o dono configurado no setup inicial
+            if (chatType === 'private') {
+              if (OWNER_TG_ID && senderId !== OWNER_TG_ID) {
+                console.log(`[TG SILENCE PV] Mensagem no privado de usuário não autorizado (${senderId}). Ignorando.`);
+                continue;
+              }
             }
 
             // Se for grupo/supergrupo, só responde se for marcada com @ ou reply direto
