@@ -1,3 +1,4 @@
+const axios = require('axios');
 /**
  * 🔄 CORVO AGENTE MOBILE - MOTOR DE LOOP AUTÔNOMO APEX (OPENCLAW RE-ACT ENGINE)
  * Persistência implacável: Só para a missão quando for irrefutavelmente concluída.
@@ -36,30 +37,60 @@ const GOOGLE_FALLBACK_MODELS = [
 ].filter((v, i, a) => v && a.indexOf(v) === i);
 
 async function callGeminiForLoop(promptText) {
-  if (!genAI) throw new Error('GEMINI_API_KEY não configurada no .env');
-  let lastErr = null;
-  for (const modName of GOOGLE_FALLBACK_MODELS) {
-    try {
-      const fbModel = genAI.getGenerativeModel({
-        model: modName,
-        generationConfig: { temperature: 0.2 }
-      });
-      const fbRes = await fbModel.generateContent(promptText);
-      const resText = fbRes.response.text();
-      if (resText) {
-        GEMINI_MODEL = modName;
-        return resText.trim();
+  if (!geminiApiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
+
+  // 1. TENTATIVA PRIORITÁRIA: INTERACTIONS API (Gemini 3.8 Flash)
+  try {
+    const interactionRes = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', {
+      model: 'gemini-3.8-flash',
+      input: promptText
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': geminiApiKey
+      },
+      timeout: 45000
+    });
+
+    if (interactionRes.data) {
+      const out = interactionRes.data.outputs?.[0]?.text || 
+                  interactionRes.data.output || 
+                  interactionRes.data.result || 
+                  (typeof interactionRes.data === 'string' ? interactionRes.data : '');
+      if (out && typeof out === 'string' && out.trim()) {
+        return out.trim();
       }
-    } catch (err) {
-      lastErr = err;
-      if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('is not supported'))) {
-        console.warn(`[LOOP GEMINI FALLBACK] Modelo "${modName}" não suportado, tentando próximo...`);
-        continue;
-      }
-      throw err;
     }
+  } catch (interErr) {
+    console.warn('[LOOP INTERACTIONS API WARN]:', interErr.response?.data?.error?.message || interErr.message);
   }
-  throw lastErr || new Error('Nenhum modelo Gemini compatível respondeu no loop.');
+
+  // 2. FALLBACK NO SDK
+  if (genAI) {
+    let lastErr = null;
+    for (const modName of GOOGLE_FALLBACK_MODELS) {
+      try {
+        const fbModel = genAI.getGenerativeModel({
+          model: modName,
+          generationConfig: { temperature: 0.2 }
+        });
+        const fbRes = await fbModel.generateContent(promptText);
+        const resText = fbRes.response.text();
+        if (resText) {
+          GEMINI_MODEL = modName;
+          return resText.trim();
+        }
+      } catch (err) {
+        lastErr = err;
+        if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('is not supported'))) {
+          continue;
+        }
+      }
+    }
+    if (lastErr) throw lastErr;
+  }
+
+  throw new Error('Nenhum modelo Gemini respondeu no loop.');
 }
 
 // Controle de Missões Ativas (Permite abortar com /stop estilo OpenClaw)
