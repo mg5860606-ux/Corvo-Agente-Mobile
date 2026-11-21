@@ -266,7 +266,7 @@ async function startPolling() {
                 isMentioned = true;
               }
               // Responde se chamarem pelo nome mesmo sem @ (Kronos, Índia, Corvo, Japa)
-              if (/\b(kronos|índia|india|corvo|japa)\b/i.test(text)) {
+              if (/\b(kronos|índia|india)\b/i.test(text)) {
                 isMentioned = true;
               }
 
