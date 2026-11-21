@@ -261,7 +261,12 @@ async function startPolling() {
               let isMentioned = false;
 
               // Verifica se foi mencionado por username (@RamOfficialBot)
-              if (botUsername && text.toLowerCase().includes(`@${botUsername.toLowerCase()}`)) {
+              const lower = text.toLowerCase();
+              if (botUsername && lower.includes('@' + botUsername.toLowerCase())) {
+                isMentioned = true;
+              }
+              // Responde se chamarem pelo nome mesmo sem @ (Kronos, Índia, Corvo, Japa)
+              if (/\b(kronos|índia|india|corvo|japa)\b/i.test(text)) {
                 isMentioned = true;
               }
 
