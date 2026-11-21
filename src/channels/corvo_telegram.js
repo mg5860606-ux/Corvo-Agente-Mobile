@@ -288,7 +288,7 @@ async function startPolling() {
             console.log(`[TG MSG] De ${senderId} (${msg.from.first_name}) [${isMedia ? 'MÍDIA' : 'TEXTO'}]: ${text.slice(0, 80)}`);
 
             // Reação dinâmica com emoji na mensagem recebida (estilo OpenClaw)
-            await reactToMessage(chatId, msg.message_id);
+            // Reação automática desativada
 
             // ================= COMANDOS ESTILO OPENCLAW (/reset, /restart, /stop, /status) =================
             // 1. Comando /stop ou /parar

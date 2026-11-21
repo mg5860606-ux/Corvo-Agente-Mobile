@@ -752,11 +752,14 @@ async function callPollinationsAI(promptText, systemPromptText = '') {
     const res = await axios.post('https://text.pollinations.ai/openai/chat/completions', {
       model: 'openai',
       messages: [
-        { role: 'system', content: systemPromptText || 'Você é uma IA direta e útil.' },
+        { role: 'system', content: systemPromptText || 'Você é a Índia, uma inteligência autônoma hacker, parceira do Marcos (Corvo). Responda sempre em português brasileiro de forma direta, natural, sem enrolação.' },
         { role: 'user', content: promptText }
       ]
     }, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
       timeout: 15000
     });
     const reply = res.data?.choices?.[0]?.message?.content?.trim();
@@ -969,18 +972,22 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
 
     let reply = '';
     
-    // Se o provedor primário for Gemini OU se não tiver ISA Cloud configurada
-    if (PRIMARY_PROVIDER === 'gemini' || !openaiClient) {
-      if (genAI) {
-        try {
+    // Tentativa com provedores primários ou fallback automático resiliente
+    try {
+      if (PRIMARY_PROVIDER === 'gemini' || !openaiClient) {
+        if (genAI) {
           reply = await callGeminiDirect(contents, systemPrompt);
-        } catch (gemErr) {
-          console.error('[GEMINI CHAT ERROR]:', gemErr.message);
-          throw gemErr;
+        } else {
+          reply = await callPollinationsAI(message || 'Oi', systemPrompt);
         }
-      } else {
-        throw new Error('Nenhum provedor de IA ativo. Configure GEMINI_API_KEY no .env!');
       }
+    } catch (primaryErr) {
+      console.warn('[CHAT ERROR - USANDO FALLBACK UNIVERSAL]:', primaryErr.message);
+      reply = await callPollinationsAI(message || 'Oi', systemPrompt);
+    }
+
+    if (!reply) {
+      reply = await callPollinationsAI(message || 'Oi', systemPrompt) || 'Sistema online e operacional.';
     } else if (openaiClient) {
       // ISA Cloud / OmniRoute ativo
       const candidateModels = [
