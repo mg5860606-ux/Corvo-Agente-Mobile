@@ -951,16 +951,6 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
       } else if (!reply && lastErr) {
         throw lastErr;
       }
-    } catch (fbErr) {
-          throw new Error(`ISA Cloud erro: ${lastErr?.message} | Google fallback: ${fbErr.message}`);
-        }
-      } else if (!reply && lastErr) {
-        throw lastErr;
-      }
-    } else if (genAI) {
-      const fbModel = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-      const fallbackResp = await fbModel.generateContent(contents);
-      reply = fallbackResp.response.text().trim();
     }
 
     // Registra no banco
