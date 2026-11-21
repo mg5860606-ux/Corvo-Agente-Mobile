@@ -94,10 +94,11 @@ let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'ge
 // Lista de modelos resilientes do Google Gemini (se o usuário tiver conta recente ou antiga)
 const GOOGLE_FALLBACK_MODELS = [
   GEMINI_MODEL,
+  'gemini-2.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
-  'gemini-pro'
+  'gemini-2.5-flash-lite',
+  'gemini-flash-latest'
 ].filter((v, i, a) => v && a.indexOf(v) === i);
 
 // Modelos Suportados no Gateway (Estilo OpenClaw & ISA Cloud)
@@ -801,9 +802,8 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
         }
       } catch (err) {
         lastErr = err;
-        if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('is not supported'))) {
-          continue;
-        }
+        console.warn(`[GEMINI MODEL WARN] Modelo ${modName} falhou: ${err.message}, tentando fallback...`);
+        continue;
       }
     }
     if (lastErr) throw lastErr;
