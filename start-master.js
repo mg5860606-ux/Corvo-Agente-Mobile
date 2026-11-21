@@ -1,5 +1,6 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const { checkAndConfigureEnv } = require('./src/core/quick_setup');
 
 function runService(name, relativePath) {
   const scriptPath = path.join(__dirname, relativePath);
@@ -15,8 +16,19 @@ function runService(name, relativePath) {
   child.on('error', (err) => console.error('[' + name + ' ERRO]: ' + err.message));
 }
 
-console.log('=== CORVO AGENTE MOBILE INICIANDO ===');
-runService('gateway', 'src/core/corvo_gateway.js');
-setTimeout(() => {
-  runService('telegram', 'src/channels/corvo_telegram.js');
-}, 2000);
+async function main() {
+  console.clear();
+  // Setup interativo e acolhedor caso não tenha .env configurado
+  await checkAndConfigureEnv();
+
+  console.log('==================================================');
+  console.log('  🦅 CORVO AGENTE MOBILE // SISTEMA INICIADO');
+  console.log('==================================================');
+  
+  runService('gateway', 'src/core/corvo_gateway.js');
+  setTimeout(() => {
+    runService('telegram', 'src/channels/corvo_telegram.js');
+  }, 2000);
+}
+
+main();
