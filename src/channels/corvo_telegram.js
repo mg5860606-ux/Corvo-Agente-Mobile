@@ -256,27 +256,29 @@ async function startPolling() {
               }
             }
 
-            // Se for grupo/supergrupo, só responde se for chamada explicitamente
+                        // Trava de Privado: no PV só responde se for o dono (ID configurado)
+            if (chatType === 'private' && !isDono) {
+              console.log(`[TG SILENCE PV] Mensagem no privado de usuário não autorizado (${senderId}). Ignorando.`);
+              continue;
+            }
+
+            // Se for grupo/supergrupo, só responde se for marcada com @ ou reply direto
             if (chatType === 'group' || chatType === 'supergroup') {
               let isMentioned = false;
 
-              // Verifica se foi mencionado por username (@RamOfficialBot)
+              // 1. Mencionado com @ (@botUsername)
               const lower = text.toLowerCase();
               if (botUsername && lower.includes('@' + botUsername.toLowerCase())) {
                 isMentioned = true;
               }
-              // Responde se chamarem pelo nome mesmo sem @ (Kronos, Índia, Corvo, Japa)
-              if (/\b(kronos|índia|india)\b/i.test(text)) {
-                isMentioned = true;
-              }
 
-              // Verifica se é reply para uma mensagem enviada pelo próprio bot
+              // 2. Reply direto para uma mensagem do bot
               if (msg.reply_to_message?.from?.username && botUsername && msg.reply_to_message.from.username.toLowerCase() === botUsername.toLowerCase()) {
                 isMentioned = true;
               }
 
               if (!isMentioned) {
-                // Não foi chamada no grupo: ignora e fica em silêncio
+                // Nenhuma menção direta com @ nem reply: silêncio absoluto no grupo
                 continue;
               }
             }
