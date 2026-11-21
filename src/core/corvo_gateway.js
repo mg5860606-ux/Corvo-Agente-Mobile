@@ -977,18 +977,21 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
 
     let reply = '';
     
+    // Contexto conversacional recente para não perder o fio da meada
+    const fullConversation = groupContext ? `Histórico recente da conversa:\n${groupContext}\n\nÚltima mensagem do usuário: "${message}"` : (message || 'Oi');
+
     // Tentativa com provedores primários ou fallback automático resiliente
     try {
       if (PRIMARY_PROVIDER === 'gemini' || !openaiClient) {
         if (genAI) {
           reply = await callGeminiDirect(contents, systemPrompt);
         } else {
-          reply = await callPollinationsAI(message || 'Oi', systemPrompt);
+          reply = await callPollinationsAI(fullConversation, systemPrompt);
         }
       }
     } catch (primaryErr) {
       console.warn('[CHAT ERROR - USANDO FALLBACK UNIVERSAL]:', primaryErr.message);
-      reply = await callPollinationsAI(message || 'Oi', systemPrompt);
+      reply = await callPollinationsAI(fullConversation, systemPrompt);
     }
 
     if (!reply) {
