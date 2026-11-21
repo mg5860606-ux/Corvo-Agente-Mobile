@@ -746,6 +746,27 @@ app.get('/models', async (req, res) => {
 
 // Endpoint conversacional robusto com Multimodal (Texto, Fotos, Áudios, Vídeos)
 
+
+async function callPollinationsAI(promptText, systemPromptText = '') {
+  try {
+    const res = await axios.post('https://text.pollinations.ai/openai/chat/completions', {
+      model: 'openai',
+      messages: [
+        { role: 'system', content: systemPromptText || 'Você é uma IA direta e útil.' },
+        { role: 'user', content: promptText }
+      ]
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 15000
+    });
+    const reply = res.data?.choices?.[0]?.message?.content?.trim();
+    if (reply) return reply;
+  } catch (err) {
+    console.warn('[POLLINATIONS WARN]:', err.message);
+  }
+  return null;
+}
+
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
   if (!apiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
   
@@ -807,6 +828,15 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
       }
     }
     if (lastErr) throw lastErr;
+  }
+
+  // 3. FALLBACK INFALÍVEL ZERO-KEY (Garante que o bot NUNCA fica mudo se a chave da Google der 401/400)
+  try {
+    console.log('[FALLBACK APEX] Acionando rota universal resiliente...');
+    const polReply = await callPollinationsAI(promptText, systemPromptText);
+    if (polReply) return polReply;
+  } catch (e) {
+    console.warn('[FALLBACK APEX ERROR]:', e.message);
   }
 
   throw new Error('Não foi possível obter resposta do Gemini em nenhum endpoint.');
