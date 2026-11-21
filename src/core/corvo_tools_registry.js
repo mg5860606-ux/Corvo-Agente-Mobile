@@ -421,4 +421,13 @@ Object.defineProperty(toolsRegistry, 'loadCustomTools', {
   configurable: true
 });
 
+
+// Injeção de ferramentas de governo mobile do Android (Termux-API, Sensores, Apps, Hardware)
+try {
+  const { registerMobileTools } = require('./corvo_mobile_tools');
+  registerMobileTools(toolsRegistry);
+} catch (e) {
+  console.warn('[MOBILE TOOLS WARN]:', e.message);
+}
+
 module.exports = toolsRegistry;
