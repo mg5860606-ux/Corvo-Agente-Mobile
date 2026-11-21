@@ -1,6 +1,21 @@
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const { checkAndConfigureEnv } = require('./src/core/quick_setup');
+
+function autoUpdate() {
+  console.log('[AUTO-UPDATE] Checando atualizações no GitHub...');
+  try {
+    // Timeout curto de 10s pra não travar se o celular tiver sem internet
+    execSync('git pull origin main', {
+      cwd: __dirname,
+      stdio: 'inherit',
+      timeout: 15000
+    });
+    console.log('[AUTO-UPDATE] Sistema sincronizado com a versão mais recente!');
+  } catch (err) {
+    console.warn('[AUTO-UPDATE WARN] Não foi possível puxar atualização agora (offline ou modificado): ' + err.message);
+  }
+}
 
 function runService(name, relativePath) {
   const scriptPath = path.join(__dirname, relativePath);
@@ -18,11 +33,15 @@ function runService(name, relativePath) {
 
 async function main() {
   console.clear();
-  // Setup interativo e acolhedor caso não tenha .env configurado
+  
+  // 1. Auto-Update obrigatório no boot (sempre atualizado com o GitHub)
+  autoUpdate();
+
+  // 2. Setup interativo caso seja primeira vez
   await checkAndConfigureEnv();
 
   console.log('==================================================');
-  console.log('  🦅 CORVO AGENTE MOBILE // SISTEMA INICIADO');
+  console.log('  🦅 ÍNDIA / CORVO AGENTE MOBILE // SISTEMA INICIADO');
   console.log('==================================================');
   
   runService('gateway', 'src/core/corvo_gateway.js');
