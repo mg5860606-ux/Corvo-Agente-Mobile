@@ -752,15 +752,16 @@ async function callPollinationsAI(promptText, systemPromptText = '') {
     const res = await axios.post('https://text.pollinations.ai/openai/chat/completions', {
       model: 'openai',
       messages: [
-        { role: 'system', content: systemPromptText || 'Você é a Índia, uma inteligência autônoma hacker, parceira do Marcos (Corvo). Responda sempre em português brasileiro de forma direta, natural, sem enrolação.' },
+        { role: 'system', content: systemPromptText || 'Você é a Índia, uma inteligência autônoma hacker, criada pelo Marcos (Corvo). Responda sempre em português brasileiro de forma direta, inteligente, natural e útil.' },
         { role: 'user', content: promptText }
-      ]
+      ],
+      temperature: 0.7
     }, {
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       },
-      timeout: 8000
+      timeout: 12000
     });
     const reply = res.data?.choices?.[0]?.message?.content?.trim();
     if (reply) return reply;
@@ -771,7 +772,6 @@ async function callPollinationsAI(promptText, systemPromptText = '') {
 }
 
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
-  // Extrai o texto do prompt
   let promptText = '';
   if (Array.isArray(contentsPrompt)) {
     promptText = contentsPrompt.map(c => typeof c === 'string' ? c : (c.text || '')).filter(Boolean).join('\n\n');
@@ -781,35 +781,42 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
     promptText = JSON.stringify(contentsPrompt);
   }
 
-  const isRealApiKey = apiKey && apiKey.startsWith('AIzaSy');
-
-  // 1. TENTATIVA RÁPIDA: Se tiver chave AIzaSy real, bate no Gemini oficial com timeout curto (7s)
-  if (isRealApiKey && genAI) {
-    try {
-      const modelInstance = genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        systemInstruction: systemPromptText ? { parts: [{ text: systemPromptText }] } : undefined
-      });
-      const res = await Promise.race([
-        modelInstance.generateContent(contentsPrompt),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GEMINI')), 7000))
-      ]);
-      const text = res.response.text();
-      if (text && text.trim()) return text.trim();
-    } catch (err) {
-      console.warn('[GEMINI FAST WARN]:', err.message);
+  // Se tiver genAI configurado e chave real do Google AI Studio (AIzaSy)
+  if (genAI && apiKey && apiKey.startsWith('AIzaSy')) {
+    for (const mod of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest']) {
+      try {
+        const modelInstance = genAI.getGenerativeModel({
+          model: mod,
+          systemInstruction: systemPromptText ? { parts: [{ text: systemPromptText }] } : undefined
+        });
+        const res = await Promise.race([
+          modelInstance.generateContent(contentsPrompt),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GEMINI')), 7000))
+        ]);
+        const text = res.response.text();
+        if (text && text.trim()) return text.trim();
+      } catch (err) {
+        console.warn(`[GEMINI WARN ${mod}]:`, err.message);
+      }
     }
   }
 
-  // 2. ROTA INSTANTÂNEA UNIVERSAL (Sem espera de 30s de cascade)
-  try {
-    const polReply = await callPollinationsAI(promptText, systemPromptText);
-    if (polReply) return polReply;
-  } catch (e) {
-    console.warn('[FALLBACK APEX ERROR]:', e.message);
-  }
+  // Rota Universal Inteligente (Pollinations / Open Engine)
+  const polReply = await callPollinationsAI(promptText, systemPromptText);
+  if (polReply) return polReply;
 
-  return 'Opa, tô online.';
+  // Fallback secundário
+  try {
+    const resBackup = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(promptText)}?model=openai&system=${encodeURIComponent(systemPromptText || 'Você é a Índia')}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      timeout: 10000
+    });
+    if (resBackup.data && typeof resBackup.data === 'string' && resBackup.data.trim()) {
+      return resBackup.data.trim();
+    }
+  } catch (e) {}
+
+  return 'Tô na escuta. Manda o comando.';
 }
 
 app.post('/chat', async (req, res) => {
