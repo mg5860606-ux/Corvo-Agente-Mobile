@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const readline = require('readline');
 
 const repoDir = path.resolve(__dirname, '../../');
 const envPath = path.join(repoDir, '.env');
@@ -53,9 +52,6 @@ async function checkAndConfigureEnv() {
     tgOwnerId = await askQuestion(rl, ' 👤 Seu ID numérico do Telegram (ou Enter): ');
   }
 
-  console.log('\n 3. WhatsApp do Dono (Opcional - aperte Enter para pular):');
-  const waPhone = await askQuestion(rl, ' 📱 Seu número com DDD (ex: 5511999999999): ');
-
   if (!exists && fs.existsSync(envExamplePath)) {
     envContent = fs.readFileSync(envExamplePath, 'utf8');
   }
@@ -64,35 +60,28 @@ async function checkAndConfigureEnv() {
   const cleanKey = geminiKey.replace(/[\r\n\t ]/g, '');
   const cleanTg = tgToken.replace(/[\r\n\t ]/g, '');
   const cleanOwner = tgOwnerId.replace(/\D/g, '');
-  const cleanPhone = waPhone.replace(/\D/g, '');
 
   let lines = envContent.split(/\r?\n/).filter(Boolean);
   const setVal = (k, v) => {
-    lines = lines.filter(l => !l.startsWith(`${k}=`));
-    lines.push(`${k}=${v}`);
+    if (!v) return;
+    const idx = lines.findIndex(l => l.startsWith(`${k}=`));
+    if (idx >= 0) lines[idx] = `${k}=${v}`;
+    else lines.push(`${k}=${v}`);
   };
 
-  if (cleanKey) setVal('GEMINI_API_KEY', cleanKey);
-  setVal('PRIMARY_PROVIDER', 'gemini');
-  setVal('GEMINI_MODEL', 'gemini-2.0-flash');
-  setVal('PORT', '3333');
-
-  if (cleanTg) setVal('TELEGRAM_BOT_TOKEN', cleanTg);
-  if (cleanOwner) {
-    setVal('MARCOS_TELEGRAM_ID', cleanOwner);
-    setVal('OWNER_TELEGRAM_ID', cleanOwner);
-  }
-  if (cleanPhone) {
-    setVal('MARCOS_WHATSAPP_PHONE', cleanPhone);
-    setVal('WHATSAPP_PAIRING_NUMBER', cleanPhone);
-  }
+  setVal('GEMINI_API_KEY', cleanKey);
+  setVal('TELEGRAM_BOT_TOKEN', cleanTg);
+  setVal('OWNER_TELEGRAM_ID', cleanOwner);
 
   fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
-  console.log('\n ✅ Configurações gravadas com sucesso no .env!');
-  console.log(' 🚀 Iniciando os serviços...\n');
-
   rl.close();
+
+  console.log('\n✅ Configuração gravada no .env com sucesso!');
+  console.log('🚀 Iniciando os motores do agente...\n');
   return true;
 }
 
 module.exports = { checkAndConfigureEnv };
+if (require.main === module) {
+  checkAndConfigureEnv();
+}
