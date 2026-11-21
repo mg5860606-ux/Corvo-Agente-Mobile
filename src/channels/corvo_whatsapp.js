@@ -10,6 +10,14 @@ const fs = require('fs');
 const axios = require('axios');
 const db = require('../core/corvo_db');
 
+function sockAuthStateRegistered(state) {
+  try {
+    return state && state.creds && state.creds.registered;
+  } catch (e) {
+    return false;
+  }
+}
+
 const authDir = path.resolve(__dirname, '../../data', 'auth_info_baileys');
 if (!fs.existsSync(authDir)) fs.mkdirSync(authDir, { recursive: true });
 
@@ -374,7 +382,7 @@ async function startWhatsApp() {
     }
   });
 
-  rl.close();
+  // rl mantido para reconexoes
 }
 
 startWhatsApp();
