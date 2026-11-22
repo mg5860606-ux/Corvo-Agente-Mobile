@@ -36,7 +36,16 @@ const toolsRegistry = {
         } else if (root && fs.existsSync('/system/bin/su')) {
           finalCmd = `su -c "${command}"`;
         }
-        const output = execSync(finalCmd, { encoding: 'utf8', timeout: 120000, maxBuffer: 15 * 1024 * 1024 });
+        const termuxPrefix = process.env.PREFIX || '/data/data/com.termux/files/usr';
+        const envOptions = {
+          encoding: 'utf8',
+          timeout: 120000,
+          maxBuffer: 15 * 1024 * 1024,
+          env: Object.assign({}, process.env, {
+            PATH: `${termuxPrefix}/bin:/system/bin:/system/xbin:${process.env.PATH || ''}`
+          })
+        };
+        const output = execSync(finalCmd, envOptions);
         return { success: true, output: output.trim() || '[Comando executado sem retorno textual]' };
       } catch (err) {
         return { success: false, error: err.message, stdout: err.stdout, stderr: err.stderr };
