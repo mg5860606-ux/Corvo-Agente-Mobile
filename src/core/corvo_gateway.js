@@ -875,10 +875,16 @@ Responda diretamente com a sua persona (Corvo Agente Mobile / Inteligência Sobe
       brain.processFeedback(message);
 
       // Bateria
-      if (/\b(bateria|status da bateria|nível de bateria)\b/i.test(message)) {
+      if (/\b(bateria|status da bateria|nível de bateria|quanto de bateria)\b/i.test(message)) {
         const bat = sensors.statusBateria();
+        if (bat.success && bat.percentage !== null) {
+          const st = bat.status ? ` (${bat.status})` : '';
+          return res.json({
+            reply: `A bateria está em ${bat.percentage}%${st}.`
+          });
+        }
         return res.json({
-          reply: `Status da bateria, Operador:\n${bat.output || JSON.stringify(bat, null, 2)}`
+          reply: 'Não consegui ler a porcentagem da bateria agora. No Android/Termux, certifique-se de que o app Termux:API está instalado e com as permissões concedidas.'
         });
       }
 
