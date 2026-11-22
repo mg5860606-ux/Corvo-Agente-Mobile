@@ -411,7 +411,7 @@ async function startPolling() {
             const typingTimer = setInterval(() => sendChatAction(chatId, 'typing'), 4500);
 
             const querAudio = /(áudio|audio|fala|voz)/i.test(text);
-            const isMission = !filePayload && /^(?:crie|criar|fa[çc]a|fazer|desenvolva|desenvolver|abra|abrir|navegue|navegar|baixe|baixar|download|instale|instalar|escaneie|escanear|scan|recon|audite|auditar|procure|buscar|busque|rode|rodar|execute|executar|edite|editar|programe|programar|suba|subir|monte|montar)\b/i.test(text.trim());
+            const isMission = !filePayload && /(?:crie|criar|fa[çc]a|fazer|desenvolva|desenvolver|abra|abrir|navegue|navegar|baixe|baixar|download|instale|instalar|escaneie|escanear|scan|recon|audite|auditar|procure|buscar|busque|rode|rodar|execute|executar|edite|editar|programe|programar|suba|subir|monte|montar|toque|clique|veja|olhe|descubra|investigue|resolva|bateria|print|foto|gps|localiza|volume|wifi|status)/i.test(text.trim()) && !/^(?:\/status|\/ajuda|\/logs|\/stop|\/reset|\/atualizar)/i.test(text.trim());
 
             try {
               if (isMission) {
