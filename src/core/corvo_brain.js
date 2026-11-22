@@ -229,7 +229,7 @@ const brain = {
       ramTotalMb: totalMem,
       ramFreeMb: freeMem,
       lowMemory: freeMem < 250, // Menos de 250MB livres
-      uptimeMinutes: Math.round(os.uptime() / 60)
+      uptimeMinutes: Math.round(process.uptime() / 60)
     };
   },
 
@@ -252,20 +252,25 @@ const brain = {
    * Regulador Dinâmico de Hardware Mobile (Bateria, Térmico, RAM)
    */
   getMobileGovernor() {
-    let batteryStatus = { percentage: 100, plugged: 'PLUGGED_AC', status: 'CHARGING' };
+    let pct = 100;
+    let isCharging = false;
+    let temperature = null;
+
     try {
-      const { execSync } = require('child_process');
-      const raw = execSync('termux-battery-status', { timeout: 3000, encoding: 'utf8' });
-      batteryStatus = JSON.parse(raw);
+      const sensors = require('../modules/corvo_sensors');
+      const bat = sensors.statusBateria();
+      if (bat && bat.percentage !== null) {
+        pct = bat.percentage;
+        isCharging = (bat.status && bat.status.toUpperCase().includes('CHARG')) || bat.plugged === 'PLUGGED_AC' || bat.plugged === 'PLUGGED_USB';
+        temperature = bat.temperature || null;
+      }
     } catch (e) {}
 
     const freeMemMb = Math.round(os.freemem() / 1024 / 1024);
-    const pct = batteryStatus.percentage ?? 100;
-    const isCharging = batteryStatus.status === 'CHARGING' || batteryStatus.plugged !== 'UNPLUGGED';
 
-    let mode = 'apex'; // Modo máximo por padrão
+    let mode = 'apex';
     if (!isCharging && pct < 20) {
-      mode = 'eco'; // Economia máxima de bateria
+      mode = 'eco';
     } else if (!isCharging && pct < 40) {
       mode = 'balanced';
     }
@@ -275,9 +280,9 @@ const brain = {
       batteryPercentage: pct,
       isCharging,
       freeMemMb,
-      temperature: batteryStatus.temperature || null,
+      temperature,
       recommendation: mode === 'eco'
-        ? 'Bateria baixa no celular: rodar em modo silencioso e evitar loops longos.'
+        ? 'Bateria baixa no celular: economia de energia ativa.'
         : 'Hardware liberado: Potência máxima APEX autorizada.'
     };
   },

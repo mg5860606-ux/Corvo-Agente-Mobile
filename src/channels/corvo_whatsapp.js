@@ -278,7 +278,7 @@ async function startWhatsApp() {
       const mob = brain.getMobileGovernor();
       const state = brain.getMobileState();
       const infoText = `🦅 *CORVO AGENTE MOBILE // SISTEMA*\n\n` +
-        `• *Modelo Ativo:* \`${process.env.PRIMARY_MODEL || 'isacloud/gemini-3.8-flash-high'}\`\n` +
+        `• *Modelo Ativo:* \`${process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-3.5-flash'}\`\n` +
         `• *Modo:* \`${mob.mode.toUpperCase()}\` (${mob.recommendation})\n` +
         `• *Bateria:* ${mob.batteryPercentage}% ${mob.isCharging ? '⚡ (Carregando)' : '🔋'}\n` +
         `• *RAM Livre:* ${mob.freeMemMb} MB / ${state.ramTotalMb} MB\n` +

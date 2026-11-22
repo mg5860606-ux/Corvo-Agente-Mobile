@@ -349,7 +349,7 @@ async function startPolling() {
               const mob = brain.getMobileGovernor();
               const state = brain.getMobileState();
               const infoText = `🦅 <b>CORVO AGENTE MOBILE // SISTEMA</b>\n\n` +
-                `• <b>Modelo Ativo:</b> <code>${process.env.PRIMARY_MODEL || 'isacloud/gemini-3.8-flash-high'}</code>\n` +
+                `• <b>Modelo Ativo:</b> <code>${process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-3.5-flash'}</code>\n` +
                 `• <b>Modo de Operação:</b> <code>${mob.mode.toUpperCase()}</code> (${mob.recommendation})\n` +
                 `• <b>Bateria:</b> ${mob.batteryPercentage}% ${mob.isCharging ? '⚡ (Carregando)' : '🔋'}\n` +
                 `• <b>RAM Livre:</b> ${mob.freeMemMb} MB / ${state.ramTotalMb} MB\n` +
