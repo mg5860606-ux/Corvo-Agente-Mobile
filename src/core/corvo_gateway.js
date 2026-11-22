@@ -747,100 +747,39 @@ app.get('/models', async (req, res) => {
 // Endpoint conversacional robusto com Multimodal (Texto, Fotos, Áudios, Vídeos)
 
 
-async function callPollinationsAI(promptText, systemPromptText = '') {
-  // 1. Tentativa via GET limpo (o mais rápido e estável do Pollinations)
-  try {
-    const cleanUser = typeof promptText === 'string' ? promptText : JSON.stringify(promptText);
-    const shortPrompt = cleanUser.slice(0, 1500);
-    const url = `https://text.pollinations.ai/${encodeURIComponent(shortPrompt)}?model=openai&system=${encodeURIComponent('Você é a Índia, assistente inteligente e direta do Marcos. Responda em português brasileiro de forma natural e sem clichês.')}`;
-    
-    const res = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 10000
-    });
-
-    if (res.data && typeof res.data === 'string' && res.data.trim()) {
-      return res.data.trim();
-    }
-  } catch (err) {
-    console.warn('[POLLINATIONS GET WARN]:', err.message);
-  }
-
-  // 2. Tentativa via POST chat completions
-  try {
-    const resPost = await axios.post('https://text.pollinations.ai/openai/chat/completions', {
-      model: 'openai',
-      messages: [
-        { role: 'system', content: 'Você é a Índia, uma inteligência direta e parceira do Marcos. Responda com naturalidade em português.' },
-        { role: 'user', content: typeof promptText === 'string' ? promptText : JSON.stringify(promptText) }
-      ],
-      temperature: 0.7
-    }, {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      timeout: 12000
-    });
-
-    const reply = resPost.data?.choices?.[0]?.message?.content?.trim();
-    if (reply) return reply;
-  } catch (err) {
-    console.warn('[POLLINATIONS POST WARN]:', err.message);
-  }
-
-  return null;
-}
-
 
 async function callGeminiInteractionsAPI(promptText, systemPromptText = '') {
   if (!apiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
 
-  const models = [
-    process.env.GEMINI_MODEL || 'gemini-3.8-flash',
-    'gemini-3.8-flash',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash'
-  ].filter((v, i, a) => v && a.indexOf(v) === i);
+  const payload = {
+    model: 'gemini-3.8-flash',
+    input: systemPromptText ? `[INSTRUÇÃO DE SISTEMA]: ${systemPromptText}\n\n${promptText}` : promptText,
+    store: true
+  };
 
-  for (const mod of models) {
-    try {
-      const payload = {
-        model: mod,
-        input: systemPromptText ? `[INSTRUÇÃO DE SISTEMA]: ${systemPromptText}\n\n${promptText}` : promptText,
-        store: true
-      };
+  const res = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', payload, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey
+    },
+    timeout: 35000
+  });
 
-      const res = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        timeout: 25000
-      });
-
-      if (res.data) {
-        const out = res.data.outputs?.[0]?.text || 
-                    res.data.output || 
-                    res.data.result || 
-                    (typeof res.data === 'string' ? res.data : '');
-        if (out && typeof out === 'string' && out.trim()) {
-          return out.trim();
-        }
-      }
-    } catch (err) {
-      console.warn(`[GOOGLE STUDIO INTERACTIONS WARN (${mod})]:`, err.response?.data?.error?.message || err.message);
+  if (res.data) {
+    const out = res.data.outputs?.[0]?.text || 
+                res.data.output || 
+                res.data.result || 
+                (typeof res.data === 'string' ? res.data : '');
+    if (out && typeof out === 'string' && out.trim()) {
+      return out.trim();
     }
   }
-  return null;
+  throw new Error('Sem resposta válida da Google Studio Interactions API.');
 }
 
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
   let promptText = '';
   if (Array.isArray(contentsPrompt)) {
-    // Pega a mensagem real do usuário
     const userPart = contentsPrompt.find(c => typeof c === 'string' && c.includes('Usuário (Marcos):'));
     if (userPart) {
       const match = userPart.match(/Usuário \(Marcos\):\s*"([^"]+)"/);
@@ -854,45 +793,8 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
     promptText = JSON.stringify(contentsPrompt);
   }
 
-  // 1. Google AI Studio - Interactions API Prioritária (gemini-3.8-flash)
-  try {
-    const interRes = await callGeminiInteractionsAPI(promptText, systemPromptText);
-    if (interRes) return interRes;
-  } catch (e) {}
-
-  // 2. Google AI Studio Oficial via SDK (@google/generative-ai)
-  if (genAI && apiKey) {
-    const modelsToTry = [
-      process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-flash-latest'
-    ];
-
-    for (const mod of modelsToTry) {
-      try {
-        const modelInstance = genAI.getGenerativeModel({
-          model: mod,
-          systemInstruction: systemPromptText ? { parts: [{ text: systemPromptText }] } : undefined
-        });
-        const res = await Promise.race([
-          modelInstance.generateContent(contentsPrompt),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GEMINI')), 15000))
-        ]);
-        const text = res.response.text();
-        if (text && text.trim()) return text.trim();
-      } catch (err) {
-        console.warn(`[GEMINI WARN ${mod}]:`, err.message);
-      }
-    }
-  }
-
-  // 2. Fallback de IA Real via Pollinations (sem frases engessadas)
-  const polReply = await callPollinationsAI(promptText, systemPromptText);
-  if (polReply) return polReply;
-
-  return 'Minha conexão com a IA oscilou por um segundo, Marcos. Pode mandar de novo?';
+  // ESTRITAMENTE Google AI Studio Interactions API (gemini-3.8-flash)
+  return await callGeminiInteractionsAPI(promptText, systemPromptText);
 }
 
 app.post('/chat', async (req, res) => {
@@ -1027,21 +929,13 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
 
     // Tentativa com provedores primários ou fallback automático resiliente
     try {
-      if (PRIMARY_PROVIDER === 'gemini' || !openaiClient) {
-        if (genAI) {
-          reply = await callGeminiDirect(contents, systemPrompt);
-        } else {
-          reply = await callPollinationsAI(fullConversation, systemPrompt);
-        }
-      }
+      reply = await callGeminiDirect(contents, systemPrompt);
     } catch (primaryErr) {
-      console.warn('[CHAT ERROR - USANDO FALLBACK UNIVERSAL]:', primaryErr.message);
-      reply = await callPollinationsAI(fullConversation, systemPrompt);
+      console.error('[GEMINI 3.8 FLASH INTERACTIONS ERROR]:', primaryErr.response?.data?.error?.message || primaryErr.message);
+      reply = 'Minha conexão com a API do Google Studio oscilou, Marcos. Tenta de novo agora.';
     }
 
-    if (!reply) {
-      reply = await callPollinationsAI(message || 'Oi', systemPrompt) || 'Sistema online e operacional.';
-    } else if (openaiClient) {
+    if (false && openaiClient) {
       // ISA Cloud / OmniRoute ativo
       const candidateModels = [
         activeModelId,
