@@ -56,15 +56,16 @@ const androidSensors = {
   },
 
   /** Informações detalhadas de bateria com múltiplos fallbacks (Termux:API, sysfs, dumpsys, adb/sh) */
-    statusBateria() {
-    // 1. Tenta termux-battery-status direto e via /data/data/com.termux/files/usr/bin/termux-battery-status
+      statusBateria() {
+    // 1. Tenta binário do termux-battery-status
     const termuxBins = [
       'termux-battery-status',
-      '/data/data/com.termux/files/usr/bin/termux-battery-status'
+      '/data/data/com.termux/files/usr/bin/termux-battery-status',
+      '$PREFIX/bin/termux-battery-status'
     ];
     for (const bin of termuxBins) {
       try {
-        const out = execSync(bin + ' 2>/dev/null', { encoding: 'utf8', timeout: 3500 }).trim();
+        const out = execSync(bin + ' 2>/dev/null', { encoding: 'utf8', timeout: 4000 }).trim();
         if (out && out.includes('{')) {
           const parsed = JSON.parse(out);
           if (parsed && (typeof parsed.percentage === 'number' || !isNaN(parseInt(parsed.percentage, 10)))) {
@@ -82,7 +83,7 @@ const androidSensors = {
       } catch (e) {}
     }
 
-    // 2. Sysfs múltiplos no Android / Linux
+    // 2. Sysfs universais do Kernel Linux / Android
     const sysfsCandidates = [
       '/sys/class/power_supply/battery/capacity',
       '/sys/class/power_supply/bms/capacity',
@@ -106,14 +107,16 @@ const androidSensors = {
       } catch (sysErr) {}
     }
 
-    // 3. Fallbacks via shell do Android (procurando no PATH completo do sistema)
-    const androidShellCmds = [
+    // 3. Fallbacks diretos via shell do Android (sh / toybox / toolbox / dumpsys / getprop / su)
+    const shellBatteryCmds = [
       '/system/bin/dumpsys battery',
-      'dumpsys battery',
       '/system/bin/cmd battery get level',
+      'su -c "/system/bin/dumpsys battery" 2>/dev/null',
+      'su -c "cat /sys/class/power_supply/battery/capacity" 2>/dev/null',
+      'dumpsys battery',
       'cmd battery get level'
     ];
-    for (const cmd of androidShellCmds) {
+    for (const cmd of shellBatteryCmds) {
       try {
         const out = execSync(cmd + ' 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 }).trim();
         const levelMatch = out.match(/level:\s*(\d+)/i);
@@ -132,7 +135,7 @@ const androidSensors = {
       success: false,
       percentage: null,
       error: 'Não consegui ler a porcentagem da bateria.',
-      hint: 'Instale o app Termux:API e conceda permissões no Android.'
+      hint: 'Rode no Termux: pkg install termux-api e abra o app Termux:API no Android.'
     };
   }
 };
