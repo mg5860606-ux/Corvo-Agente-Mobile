@@ -26,7 +26,7 @@ const openaiClient = (openaiBaseUrl && openaiApiKey)
   : null;
 
 const PRIMARY_PROVIDER = (process.env.PRIMARY_PROVIDER || (openaiClient ? 'isacloud' : 'gemini')).toLowerCase();
-let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-2.5-pro').trim();
+let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-3.5-flash').trim();
 
 const GOOGLE_FALLBACK_MODELS = [
   GEMINI_MODEL,
@@ -40,28 +40,45 @@ const GOOGLE_FALLBACK_MODELS = [
 async function callGeminiForLoop(promptText) {
   if (!geminiApiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
 
-  const interactionRes = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', {
-    model: 'gemini-3.8-flash',
-    input: promptText,
-    store: true
-  }, {
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': geminiApiKey
-    },
-    timeout: 45000
-  });
+  const candidateModels = [process.env.GEMINI_MODEL, 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash']
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
 
-  if (interactionRes.data) {
-    const out = interactionRes.data.outputs?.[0]?.text || 
-                interactionRes.data.output || 
-                interactionRes.data.result || 
-                (typeof interactionRes.data === 'string' ? interactionRes.data : '');
-    if (out && typeof out === 'string' && out.trim()) {
-      return out.trim();
+  let lastError = null;
+  for (const modelName of candidateModels) {
+    try {
+      const interactionRes = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', {
+        model: modelName,
+        input: promptText,
+        store: true
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': geminiApiKey
+        },
+        timeout: 45000
+      });
+
+      if (interactionRes.data) {
+        const stepText = interactionRes.data.steps?.find(s => s.type === 'model_output')?.content?.[0]?.text;
+        const out = interactionRes.data.outputs?.[0]?.text || 
+                    stepText || 
+                    interactionRes.data.output || 
+                    interactionRes.data.result || 
+                    (typeof interactionRes.data === 'string' ? interactionRes.data : '');
+        if (out && typeof out === 'string' && out.trim()) {
+          return out.trim();
+        }
+      }
+    } catch (err) {
+      lastError = err;
+      const status = err.response?.status;
+      const msg = err.response?.data?.error?.message || err.message;
+      console.warn(`[LOOP GEMINI API] Falha no modelo ${modelName} (${status}): ${msg}. Tentando próximo...`);
     }
   }
-  throw new Error('Falha na resposta do Gemini 3.8 Flash Interactions API.');
+
+  throw new Error(`Falha na resposta do Gemini Interactions API: ${lastError?.message || 'erro desconhecido'}`);
 }
 
 // Controle de Missões Ativas (Permite abortar com /stop estilo OpenClaw)

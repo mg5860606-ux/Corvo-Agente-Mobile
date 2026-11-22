@@ -89,7 +89,7 @@ const openaiClient = (isaBaseUrl && isaApiKey)
   : null;
 
 const PRIMARY_PROVIDER = (process.env.PRIMARY_PROVIDER || (openaiClient ? 'isacloud' : 'gemini')).toLowerCase();
-let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-2.5-pro').trim();
+let GEMINI_MODEL = (process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-3.5-flash').trim();
 
 // Lista de modelos resilientes do Google Gemini (se o usuário tiver conta recente ou antiga)
 const GOOGLE_FALLBACK_MODELS = [
@@ -103,13 +103,9 @@ const GOOGLE_FALLBACK_MODELS = [
 
 // Modelos Suportados no Gateway (Estilo OpenClaw & ISA Cloud)
 let AVAILABLE_MODELS = [
-  { id: 'isacloud/gemini-3.8-flash-high', name: 'ISA Cloud - Gemini 3.8 Flash High (Rápido / Apex)', type: 'cloud' },
-  { id: 'agy/gemini-3.8-flash-high', name: 'ISA Cloud - AGY Gemini 3.8 Flash High', type: 'cloud' },
-  { id: 'dual/gemini-3.8-flash-high', name: 'ISA Cloud - Dual Gemini 3.8 Flash High', type: 'cloud' },
-  { id: 'isacloud/gemini-3.8-flash-low', name: 'ISA Cloud - Gemini 3.8 Flash Low', type: 'cloud' },
-  { id: 'gemini-2.5-flash', name: 'ISA Cloud - Gemini 2.5 Flash', type: 'cloud' },
-  { id: 'gemini-flash-latest', name: 'Google Gemini Flash Latest (Fallback Direto)', type: 'cloud' },
-  { id: 'qwen2.5-coder-7b-instruct', name: 'Qwen 2.5 Coder 7B (Llama.cpp Local)', type: 'local' }
+  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash (Google AI Studio - Recomendado & Sem Limite Baixo)', type: 'cloud' },
+  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash-Lite (Super Rápido / Baixa Latência)', type: 'cloud' },
+  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash (Apex Preview)', type: 'cloud' }
 ];
 
 async function refreshModelsFromOmniRoute() {
@@ -135,7 +131,7 @@ async function refreshModelsFromOmniRoute() {
 }
 refreshModelsFromOmniRoute();
 
-let activeModelId = process.env.PRIMARY_MODEL || 'isacloud/gemini-3.8-flash-high';
+let activeModelId = process.env.PRIMARY_MODEL || 'gemini-3.5-flash';
 const activeJobs = new Map();
 let whatsappProcess = null;
 let telegramRunning = false;
@@ -751,30 +747,47 @@ app.get('/models', async (req, res) => {
 async function callGeminiInteractionsAPI(promptText, systemPromptText = '') {
   if (!apiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
 
-  const payload = {
-    model: 'gemini-3.8-flash',
-    input: systemPromptText ? `[INSTRUÇÃO DE SISTEMA]: ${systemPromptText}\n\n${promptText}` : promptText,
-    store: true
-  };
+  const candidateModels = [process.env.GEMINI_MODEL, 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash']
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
 
-  const res = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', payload, {
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey
-    },
-    timeout: 35000
-  });
+  let lastError = null;
+  for (const modelName of candidateModels) {
+    try {
+      const payload = {
+        model: modelName,
+        input: systemPromptText ? `[INSTRUÇÃO DE SISTEMA]: ${systemPromptText}\n\n${promptText}` : promptText,
+        store: true
+      };
 
-  if (res.data) {
-    const out = res.data.outputs?.[0]?.text || 
-                res.data.output || 
-                res.data.result || 
-                (typeof res.data === 'string' ? res.data : '');
-    if (out && typeof out === 'string' && out.trim()) {
-      return out.trim();
+      const res = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
+        timeout: 35000
+      });
+
+      if (res.data) {
+        const stepText = res.data.steps?.find(s => s.type === 'model_output')?.content?.[0]?.text;
+        const out = res.data.outputs?.[0]?.text || 
+                    stepText || 
+                    res.data.output || 
+                    res.data.result || 
+                    (typeof res.data === 'string' ? res.data : '');
+        if (out && typeof out === 'string' && out.trim()) {
+          return out.trim();
+        }
+      }
+    } catch (err) {
+      lastError = err;
+      const status = err.response?.status;
+      const msg = err.response?.data?.error?.message || err.message;
+      console.warn(`[GEMINI INTERACTIONS API] Falha no modelo ${modelName} (${status}): ${msg}. Tentando próximo...`);
     }
   }
-  throw new Error('Sem resposta válida da Google Studio Interactions API.');
+
+  throw new Error(`Sem resposta válida da Google Studio Interactions API: ${lastError?.message || 'erro desconhecido'}`);
 }
 
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
