@@ -78,15 +78,61 @@ No painel você pode:
 
 ---
 
-## ✈️ Usando pelo Telegram
+## 🔓 Como Liberar o Termux para o Agente Controlar o Celular
 
-1. Fale com o `@BotFather` no Telegram e crie um bot (ele vai te dar um token).
-2. Abra o arquivo `.env` e cole o token em `TELEGRAM_BOT_TOKEN=`.
-3. Comandos úteis no Telegram:
-   - `/status` — Mostra bateria, memória RAM e saúde do sistema.
-   - `/stop` — Para qualquer tarefa ou comando em execução.
-   - `/reset` — Limpa a conversa recente e começa do zero.
-   - **Ordens em linguagem natural:** ex: *"crie um script de backup"*, *"navegue no site X e tire print"*, *"escaneie a porta 80 do IP Y"*.
+Para o agente conseguir acessar armazenamento, ler bateria real, GPS, tirar fotos, executar comandos do Android e interagir com o celular, execute estes passos:
+
+### 1️⃣ Liberar Acesso ao Armazenamento (Fotos, Arquivos e Downloads)
+No terminal do Termux, execute:
+```bash
+termux-setup-storage
+```
+> *(Aparecerá um pop-up na tela do Android: clique em **Permitir**)*
+
+---
+
+### 2️⃣ Instalar o Pacote de Sensores e Ferramentas do Android
+```bash
+pkg update -y && pkg install termux-api termux-tools -y
+```
+
+---
+
+### 3️⃣ Instalar o Aplicativo Termux:API no Android
+Para comandos de hardware (bateria, localização, SMS, câmera), instale o app complementar **Termux:API**:
+- Baixe no [F-Droid: Termux:API](https://f-droid.org/packages/com.termux.api/) ou nas [Releases do GitHub](https://github.com/termux/termux-api/releases).
+- Depois de instalar o app, vá nas configurações do celular:
+  - **Configurações** > **Aplicativos** > **Termux:API** > **Permissões**: conceda *Localização*, *Câmera*, *Microfone* e *SMS*.
+  - **Bateria**: marque como **"Sem restrições" / "Não otimizar"** (tanto no Termux quanto no Termux:API).
+
+---
+
+### 4️⃣ Manter o Agente Sempre Vivo em Segundo Plano
+Para o Android não suspender o bot quando a tela apagar:
+```bash
+termux-wake-lock
+```
+
+---
+
+### 5️⃣ Controle de Toques na Tela e Apps (Root ou Shizuku)
+- **Com Celular com Root:**
+  Execute `su` no Termux uma vez para autorizar comandos de toque (`input tap`, `input swipe`) e prints de tela nativos.
+- **Com Shizuku (Sem Root):**
+  Configure o `rish` no Termux para liberar toques automáticos de tela e automações visuais com IA.
+
+---
+
+## 🎮 Comandos Disponíveis no Telegram e WhatsApp
+
+Você pode mandar estes comandos soltos no privado ou em grupos (sem precisar marcar com `@`):
+- `/status` — Mostra bateria real, memória RAM livre, uptime e modelo ativo (`gemini-3.5-flash`).
+- `/ajuda` — Exibe a lista completa de comandos rápidos e orientações.
+- `/logs` — Mostra os últimos registros de operação e diagnósticos do sistema.
+- `/atualizar` — Puxa as novidades mais recentes do GitHub e reinicia os serviços na hora.
+- `/stop` ou `/parar` — Interrompe imediatamente qualquer missão ou tarefa em andamento.
+- `/reset` — Limpa o histórico recente da conversa e inicia uma nova sessão limpa.
+- `/restart` — Reinicia os motores do agente.
 
 ---
 
