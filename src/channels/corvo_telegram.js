@@ -264,8 +264,10 @@ async function startPolling() {
               }
             }
 
-            // Se for grupo/supergrupo, só responde se for marcada com @ ou reply direto
+            // Se for grupo/supergrupo:
             if (chatType === 'group' || chatType === 'supergroup') {
+              const isCommand = /^\/(?:atualizar|update|upgrade|status|info|sistema|restart|reiniciar|stop|parar|cancelar|reset|clear|novo|limpar)\b/i.test(cleanText);
+              
               let isMentioned = false;
 
               // 1. Mencionado com @ (@botUsername)
@@ -279,10 +281,11 @@ async function startPolling() {
                 isMentioned = true;
               }
 
-              if (!isMentioned) {
-                // Nenhuma menção direta com @ nem reply: silêncio absoluto no grupo
+              // Se não for comando do sistema E não for mencionado/reply: silêncio absoluto
+              if (!isCommand && !isMentioned) {
                 continue;
               }
+            }
             }
 
             console.log(`[TG MSG] De ${senderId} (${msg.from.first_name}) [${isMedia ? 'MÍDIA' : 'TEXTO'}]: ${text.slice(0, 80)}`);
