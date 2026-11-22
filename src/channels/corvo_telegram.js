@@ -331,7 +331,9 @@ async function startPolling() {
               try {
                 const { execSync } = require('child_process');
                 const repoDir = path.resolve(__dirname, '../../');
-                const gitRes = execSync('git pull origin main', { cwd: repoDir, encoding: 'utf8', timeout: 35000 });
+                // Descarta alteracoes locais em arquivos autogerados como package-lock.json para nunca dar conflito
+                try { execSync('git checkout -- package-lock.json 2>/dev/null || true', { cwd: repoDir, timeout: 5000 }); } catch (e) {}
+                const gitRes = execSync('git fetch origin main && git reset --hard origin/main', { cwd: repoDir, encoding: 'utf8', timeout: 35000 });
                 await sendMessage(chatId, `✅ <b>Atualizado com sucesso!</b>\n\n<code>${gitRes.trim().slice(0, 300)}</code>\n\n🔄 Reiniciando os motores para aplicar...`, replyId);
                 setTimeout(() => process.exit(0), 1500);
               } catch (gitErr) {
