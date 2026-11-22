@@ -280,7 +280,7 @@ async function startWhatsApp() {
       const infoText = `🦅 *CORVO AGENTE MOBILE // SISTEMA*\n\n` +
         `• *Modelo Ativo:* \`${process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-3.5-flash'}\`\n` +
         `• *Modo:* \`${mob.mode.toUpperCase()}\` (${mob.recommendation})\n` +
-        `• *Bateria:* ${mob.batteryPercentage}% ${mob.isCharging ? '⚡ (Carregando)' : '🔋'}\n` +
+        `• *Bateria:* ${mob.batteryPercentage !== null ? (mob.batteryPercentage + '% ' + (mob.isCharging ? '⚡ (Carregando)' : '🔋')) : 'Indisponível (abra Termux:API)'}\n` +
         `• *RAM Livre:* ${mob.freeMemMb} MB / ${state.ramTotalMb} MB\n` +
         `• *Uptime:* ${state.uptimeMinutes} minutos\n` +
         `• *Navegador Web:* ${corvoBrowser.browser ? '🟢 Ativo' : '⚪ Standby'}\n` +

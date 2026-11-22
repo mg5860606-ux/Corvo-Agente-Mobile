@@ -252,14 +252,14 @@ const brain = {
    * Regulador Dinâmico de Hardware Mobile (Bateria, Térmico, RAM)
    */
   getMobileGovernor() {
-    let pct = 100;
+    let pct = null;
     let isCharging = false;
     let temperature = null;
 
     try {
       const sensors = require('../modules/corvo_sensors');
       const bat = sensors.statusBateria();
-      if (bat && bat.percentage !== null) {
+      if (bat && bat.percentage !== null && !isNaN(bat.percentage)) {
         pct = bat.percentage;
         isCharging = (bat.status && bat.status.toUpperCase().includes('CHARG')) || bat.plugged === 'PLUGGED_AC' || bat.plugged === 'PLUGGED_USB';
         temperature = bat.temperature || null;
@@ -269,9 +269,9 @@ const brain = {
     const freeMemMb = Math.round(os.freemem() / 1024 / 1024);
 
     let mode = 'apex';
-    if (!isCharging && pct < 20) {
+    if (pct !== null && !isCharging && pct < 20) {
       mode = 'eco';
-    } else if (!isCharging && pct < 40) {
+    } else if (pct !== null && !isCharging && pct < 40) {
       mode = 'balanced';
     }
 

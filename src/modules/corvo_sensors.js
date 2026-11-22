@@ -56,37 +56,44 @@ const androidSensors = {
   },
 
   /** Informações detalhadas de bateria com múltiplos fallbacks (Termux:API, sysfs, dumpsys, adb/sh) */
-  statusBateria() {
-    // 1. Tenta termux-battery-status rápido
-    const res = runTermuxApi('termux-battery-status', 3000);
-    if (res.success && res.output && res.output.includes('{')) {
+    statusBateria() {
+    // 1. Tenta termux-battery-status direto e via /data/data/com.termux/files/usr/bin/termux-battery-status
+    const termuxBins = [
+      'termux-battery-status',
+      '/data/data/com.termux/files/usr/bin/termux-battery-status'
+    ];
+    for (const bin of termuxBins) {
       try {
-        const parsed = JSON.parse(res.output);
-        if (typeof parsed.percentage === 'number' || !isNaN(parseInt(parsed.percentage, 10))) {
-          return {
-            success: true,
-            percentage: parseInt(parsed.percentage, 10),
-            status: parsed.status || 'Discharging',
-            plugged: parsed.plugged,
-            temperature: parsed.temperature,
-            health: parsed.health,
-            output: `Bateria em ${parsed.percentage}% (${parsed.status || 'Em uso'})`
-          };
+        const out = execSync(bin + ' 2>/dev/null', { encoding: 'utf8', timeout: 3500 }).trim();
+        if (out && out.includes('{')) {
+          const parsed = JSON.parse(out);
+          if (parsed && (typeof parsed.percentage === 'number' || !isNaN(parseInt(parsed.percentage, 10)))) {
+            return {
+              success: true,
+              percentage: parseInt(parsed.percentage, 10),
+              status: parsed.status || 'Discharging',
+              plugged: parsed.plugged,
+              temperature: parsed.temperature,
+              health: parsed.health,
+              output: `Bateria em ${parsed.percentage}%`
+            };
+          }
         }
       } catch (e) {}
     }
 
-    // 2. Fallbacks diretos via sysfs do Linux/Android
+    // 2. Sysfs múltiplos no Android / Linux
     const sysfsCandidates = [
       '/sys/class/power_supply/battery/capacity',
       '/sys/class/power_supply/bms/capacity',
-      '/sys/devices/platform/battery/power_supply/battery/capacity'
+      '/sys/devices/platform/battery/power_supply/battery/capacity',
+      '/sys/class/power_supply/battery/charge_counter'
     ];
     for (const capPath of sysfsCandidates) {
       try {
         if (fs.existsSync(capPath)) {
           const cap = parseInt(fs.readFileSync(capPath, 'utf8').trim(), 10);
-          if (!isNaN(cap)) {
+          if (!isNaN(cap) && cap >= 0 && cap <= 100) {
             return {
               success: true,
               percentage: cap,
@@ -99,40 +106,33 @@ const androidSensors = {
       } catch (sysErr) {}
     }
 
-    // 3. Fallback via dumpsys battery
-    try {
-      const dump = execSync('dumpsys battery 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 });
-      const levelMatch = dump.match(/level:\s*(\d+)/i);
-      if (levelMatch) {
-        const lvl = parseInt(levelMatch[1], 10);
-        return {
-          success: true,
-          percentage: lvl,
-          source: 'dumpsys',
-          output: `Bateria em ${lvl}%`
-        };
-      }
-    } catch (dumpErr) {}
-
-    // 4. Fallback cmd battery get level
-    try {
-      const cmdOut = execSync('cmd battery get level 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 }).trim();
-      const num = parseInt(cmdOut, 10);
-      if (!isNaN(num)) {
-        return {
-          success: true,
-          percentage: num,
-          source: 'cmd_battery',
-          output: `Bateria em ${num}%`
-        };
-      }
-    } catch (cmdErr) {}
+    // 3. Fallbacks via shell do Android (procurando no PATH completo do sistema)
+    const androidShellCmds = [
+      '/system/bin/dumpsys battery',
+      'dumpsys battery',
+      '/system/bin/cmd battery get level',
+      'cmd battery get level'
+    ];
+    for (const cmd of androidShellCmds) {
+      try {
+        const out = execSync(cmd + ' 2>/dev/null || true', { encoding: 'utf8', timeout: 3000 }).trim();
+        const levelMatch = out.match(/level:\s*(\d+)/i);
+        if (levelMatch) {
+          const lvl = parseInt(levelMatch[1], 10);
+          return { success: true, percentage: lvl, source: cmd, output: `Bateria em ${lvl}%` };
+        }
+        const directNum = parseInt(out, 10);
+        if (!isNaN(directNum) && directNum >= 0 && directNum <= 100) {
+          return { success: true, percentage: directNum, source: cmd, output: `Bateria em ${directNum}%` };
+        }
+      } catch (e) {}
+    }
 
     return {
       success: false,
       percentage: null,
       error: 'Não consegui ler a porcentagem da bateria.',
-      hint: 'Verifique se o pacote `termux-api` e o app `Termux:API` estão instalados com permissões concedidas.'
+      hint: 'Instale o app Termux:API e conceda permissões no Android.'
     };
   }
 };

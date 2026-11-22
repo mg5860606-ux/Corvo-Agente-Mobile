@@ -747,11 +747,41 @@ app.get('/models', async (req, res) => {
 async function callGeminiInteractionsAPI(promptText, systemPromptText = '') {
   if (!apiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
 
-  const candidateModels = [process.env.GEMINI_MODEL, 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash']
+  const candidateModels = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash']
     .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i);
 
   let lastError = null;
+
+  // 1. Tenta rota ultrarrápida generateContent (latência média 800ms)
+  for (const modelName of candidateModels) {
+    try {
+      const payload = {
+        contents: [{ role: 'user', parts: [{ text: promptText }] }]
+      };
+      if (systemPromptText) {
+        payload.system_instruction = { parts: [{ text: systemPromptText }] };
+      }
+
+      const res = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        payload,
+        { headers: { 'Content-Type': 'application/json' }, timeout: 15000 }
+      );
+
+      const candidateText = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (candidateText && typeof candidateText === 'string' && candidateText.trim()) {
+        return candidateText.trim();
+      }
+    } catch (err) {
+      lastError = err;
+      const status = err.response?.status;
+      const msg = err.response?.data?.error?.message || err.message;
+      console.warn(`[GEMINI API] Falha rápida em ${modelName} (${status}): ${msg}. Tentando próximo...`);
+    }
+  }
+
+  // 2. Fallback para rota Interactions API
   for (const modelName of candidateModels) {
     try {
       const payload = {
@@ -765,7 +795,7 @@ async function callGeminiInteractionsAPI(promptText, systemPromptText = '') {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey
         },
-        timeout: 35000
+        timeout: 25000
       });
 
       if (res.data) {
@@ -781,13 +811,10 @@ async function callGeminiInteractionsAPI(promptText, systemPromptText = '') {
       }
     } catch (err) {
       lastError = err;
-      const status = err.response?.status;
-      const msg = err.response?.data?.error?.message || err.message;
-      console.warn(`[GEMINI INTERACTIONS API] Falha no modelo ${modelName} (${status}): ${msg}. Tentando próximo...`);
     }
   }
 
-  throw new Error(`Sem resposta válida da Google Studio Interactions API: ${lastError?.message || 'erro desconhecido'}`);
+  throw new Error(`Sem resposta da API Google Studio: ${lastError?.message || 'erro desconhecido'}`);
 }
 
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
@@ -875,7 +902,7 @@ Responda diretamente com a sua persona (Corvo Agente Mobile / Inteligência Sobe
       brain.processFeedback(message);
 
       // Bateria
-      if (/\b(bateria|status da bateria|nível de bateria|quanto de bateria)\b/i.test(message)) {
+      if (/(bateria|porcento.*bateria|status.*bateria|nivel.*bateria|carga.*celular)/i.test(message)) {
         const bat = sensors.statusBateria();
         if (bat.success && bat.percentage !== null) {
           const st = bat.status ? ` (${bat.status})` : '';

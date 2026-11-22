@@ -40,11 +40,26 @@ const GOOGLE_FALLBACK_MODELS = [
 async function callGeminiForLoop(promptText) {
   if (!geminiApiKey) throw new Error('GEMINI_API_KEY não configurada no .env');
 
-  const candidateModels = [process.env.GEMINI_MODEL, 'gemini-3.5-flash', 'gemini-3.1-flash-lite', 'gemini-3.8-flash']
+  const candidateModels = [process.env.GEMINI_MODEL, 'gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash']
     .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i);
 
   let lastError = null;
+
+  for (const modelName of candidateModels) {
+    try {
+      const res = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`,
+        { contents: [{ role: 'user', parts: [{ text: promptText }] }] },
+        { headers: { 'Content-Type': 'application/json' }, timeout: 20000 }
+      );
+      const txt = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (txt && typeof txt === 'string' && txt.trim()) return txt.trim();
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
   for (const modelName of candidateModels) {
     try {
       const interactionRes = await axios.post('https://generativelanguage.googleapis.com/v1beta/interactions', {
@@ -56,7 +71,7 @@ async function callGeminiForLoop(promptText) {
           'Content-Type': 'application/json',
           'x-goog-api-key': geminiApiKey
         },
-        timeout: 45000
+        timeout: 30000
       });
 
       if (interactionRes.data) {
@@ -72,13 +87,10 @@ async function callGeminiForLoop(promptText) {
       }
     } catch (err) {
       lastError = err;
-      const status = err.response?.status;
-      const msg = err.response?.data?.error?.message || err.message;
-      console.warn(`[LOOP GEMINI API] Falha no modelo ${modelName} (${status}): ${msg}. Tentando próximo...`);
     }
   }
 
-  throw new Error(`Falha na resposta do Gemini Interactions API: ${lastError?.message || 'erro desconhecido'}`);
+  throw new Error(`Falha na resposta do Gemini API: ${lastError?.message || 'erro desconhecido'}`);
 }
 
 // Controle de Missões Ativas (Permite abortar com /stop estilo OpenClaw)

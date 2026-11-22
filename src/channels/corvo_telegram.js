@@ -351,7 +351,7 @@ async function startPolling() {
               const infoText = `🦅 <b>CORVO AGENTE MOBILE // SISTEMA</b>\n\n` +
                 `• <b>Modelo Ativo:</b> <code>${process.env.GEMINI_MODEL || process.env.PRIMARY_MODEL || 'gemini-3.5-flash'}</code>\n` +
                 `• <b>Modo de Operação:</b> <code>${mob.mode.toUpperCase()}</code> (${mob.recommendation})\n` +
-                `• <b>Bateria:</b> ${mob.batteryPercentage}% ${mob.isCharging ? '⚡ (Carregando)' : '🔋'}\n` +
+                `• <b>Bateria:</b> ${mob.batteryPercentage !== null ? (mob.batteryPercentage + '% ' + (mob.isCharging ? '⚡ (Carregando)' : '🔋')) : 'Indisponível (abra Termux:API)'}\n` +
                 `• <b>RAM Livre:</b> ${mob.freeMemMb} MB / ${state.ramTotalMb} MB\n` +
                 `• <b>Uptime:</b> ${state.uptimeMinutes} minutos\n` +
                 `• <b>Plataforma:</b> ${state.isTermux ? 'Android Termux' : state.platform}\n` +
