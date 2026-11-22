@@ -780,7 +780,7 @@ async function callGeminiInteractionsAPI(promptText, systemPromptText = '') {
 async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
   let promptText = '';
   if (Array.isArray(contentsPrompt)) {
-    const userPart = contentsPrompt.find(c => typeof c === 'string' && c.includes('Usuário (Marcos):'));
+    const userPart = contentsPrompt.find(c => typeof c === 'string' && c.includes('Dono / Usuário:'));
     if (userPart) {
       const match = userPart.match(/Usuário \(Marcos\):\s*"([^"]+)"/);
       promptText = match ? match[1] : userPart;
@@ -838,9 +838,9 @@ app.post('/chat', async (req, res) => {
 
     const textPrompt = `${systemPrompt}
 ${contextMemo}
-Usuário (Marcos): "${message || 'Analise a mídia em anexo'}"
+Dono / Usuário: "${message || 'Analise a mídia em anexo'}"
 
-Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile), sem clichês, sem enrolação.`;
+Responda diretamente com a sua persona (Corvo Agente Mobile / Inteligência Soberana), sem clichês, sem enrolação.`;
 
     contents.push(textPrompt);
 
@@ -865,7 +865,7 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
       if (/\b(bateria|status da bateria|nível de bateria)\b/i.test(message)) {
         const bat = sensors.statusBateria();
         return res.json({
-          reply: `Status da bateria, Marcos:\n${bat.output || JSON.stringify(bat, null, 2)}`
+          reply: `Status da bateria, Operador:\n${bat.output || JSON.stringify(bat, null, 2)}`
         });
       }
 
@@ -897,7 +897,7 @@ Responda diretamente com a sua persona (amante do Marcos / Corvo Agente Mobile),
       if (/\b(arsenal|quais s[aã]o suas ferramentas|ferramentas ativas)\b/i.test(message)) {
         const toolsList = Object.keys(toolsRegistry).map(k => `• <b>${k}</b>: ${toolsRegistry[k].description}`).join('\n');
         return res.json({
-          reply: `Aqui está o meu arsenal ativo pronto para você comandar, Marcos:\n\n${toolsList}`
+          reply: `Aqui está o meu arsenal ativo pronto para você comandar, Operador:\n\n${toolsList}`
         });
       }
 
