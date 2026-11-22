@@ -458,7 +458,7 @@ async function startPolling() {
                 const missionId = `mission_${Date.now()}`;
 
                 const missionRes = await autonomousLoop.runAutonomousMission(missionId, text, {
-                  maxSteps: 25,
+                  maxSteps: 60,
                   onProgress: async ({ step, maxSteps, description }) => {
                     await sendChatAction(chatId, 'typing');
                     if (statusMsg && statusMsg.message_id) {

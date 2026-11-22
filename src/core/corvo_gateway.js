@@ -162,7 +162,7 @@ async function spawnSubagent(jobId, prompt, contextData = {}) {
 
   try {
     autonomousLoop.runAutonomousMission(jobId, prompt, {
-      maxSteps: 25,
+      maxSteps: 60,
       onComplete: async (res) => {
         await db.saveJob(jobId, 'completed', prompt, res.report);
         activeJobs.set(jobId, { id: jobId, status: 'completed', prompt, result: res.report });

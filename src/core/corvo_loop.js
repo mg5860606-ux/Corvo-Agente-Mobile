@@ -285,7 +285,7 @@ ${toolsDoc}`;
   ];
 
   let step = 0;
-  const MAX_STEPS = options.maxSteps || 30; // Até 30 iterações implacáveis
+  const MAX_STEPS = options.maxSteps || 60; // Até 60 iterações implacáveis // Até 30 iterações implacáveis
   let completed = false;
   let finalReport = '';
 

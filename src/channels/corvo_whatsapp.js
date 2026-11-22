@@ -362,7 +362,7 @@ async function startWhatsApp() {
         const missionId = `mission_${Date.now()}`;
 
         const missionRes = await autonomousLoop.runAutonomousMission(missionId, text, {
-          maxSteps: 25,
+          maxSteps: 60,
           onProgress: async ({ step, maxSteps, description }) => {
             try {
               await sock.sendPresenceUpdate('composing', jid);
