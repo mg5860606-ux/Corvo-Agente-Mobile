@@ -265,6 +265,15 @@ async function startWhatsApp() {
         const repoDir = path.resolve(__dirname, '../../');
         try { execSync('git checkout -- package-lock.json 2>/dev/null || true', { cwd: repoDir, timeout: 5000 }); } catch (e) {}
         const gitRes = execSync('git fetch origin main && git reset --hard origin/main', { cwd: repoDir, encoding: 'utf8', timeout: 35000 });
+        try {
+          const stateFile = path.resolve(repoDir, 'data', 'update_notify.json');
+          fs.writeFileSync(stateFile, JSON.stringify({
+            channel: 'whatsapp',
+            chatId: String(jid),
+            commitInfo: gitRes.trim().slice(0, 300),
+            time: Date.now()
+          }), 'utf8');
+        } catch(e) {}
         await sock.sendMessage(jid, { text: `✅ *Atualizado com sucesso!*\n\n` + gitRes.trim().slice(0, 300) + '\n\n🔄 *Reiniciando motores para aplicar...*' });
         setTimeout(() => process.exit(0), 1500);
       } catch (gitErr) {
