@@ -267,6 +267,22 @@ function registerMobileTools(toolsRegistry) {
     }
   };
 
+  // 17. Visão Computacional: Localizar e Clicar em Elemento Visual na Tela
+  toolsRegistry['mobile_vision_click'] = {
+    description: 'Enxerga a tela atual do celular Android, localiza visualmente um botão ou elemento pelo nome/descrição e clica nele automaticamente.',
+    parameters: {
+      type: 'object',
+      properties: {
+        elementDescription: { type: 'string', description: 'O que você quer clicar (ex: "botão entrar", "ícone de lupa", "foto de perfil", "enviar mensagem")' }
+      },
+      required: ['elementDescription']
+    },
+    execute: async ({ elementDescription }) => {
+      const corvoVision = require('../modules/corvo_vision');
+      return corvoVision.clicarEmElementoVisual(elementDescription);
+    }
+  };
+
   console.log('[TOOL FORGE] Ferramentas nativas do Android registradas com sucesso!');
 }
 

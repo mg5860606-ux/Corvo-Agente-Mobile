@@ -811,9 +811,17 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
     promptText = JSON.stringify(contentsPrompt);
   }
 
-  // 1. Google AI Studio (se chave for válida AIzaSy)
-  if (genAI && apiKey && apiKey.startsWith('AIzaSy')) {
-    for (const mod of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest']) {
+  // 1. Google AI Studio Oficial (Gemini 2.5 Pro / Flash / 2.0 Flash)
+  if (genAI && apiKey) {
+    const modelsToTry = [
+      process.env.GEMINI_MODEL || 'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-flash-latest'
+    ];
+
+    for (const mod of modelsToTry) {
       try {
         const modelInstance = genAI.getGenerativeModel({
           model: mod,
@@ -821,7 +829,7 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
         });
         const res = await Promise.race([
           modelInstance.generateContent(contentsPrompt),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GEMINI')), 7000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_GEMINI')), 15000))
         ]);
         const text = res.response.text();
         if (text && text.trim()) return text.trim();
@@ -831,23 +839,11 @@ async function callGeminiDirect(contentsPrompt, systemPromptText = '') {
     }
   }
 
-  // 2. Rota Universal (Pollinations GET & POST)
+  // 2. Fallback de IA Real via Pollinations (sem frases engessadas)
   const polReply = await callPollinationsAI(promptText, systemPromptText);
   if (polReply) return polReply;
 
-  // 3. Respostas contextuais se a rede falhar de vez
-  const lower = (promptText || '').toLowerCase();
-  if (lower.includes('tudo bem') || lower.includes('como você tá') || lower.includes('voce ta bem')) {
-    return 'Tudo em paz por aqui, Marcos. E contigo?';
-  }
-  if (lower.includes('oque ta fazendo') || lower.includes('que ta fazendo') || lower.includes('fazendo o que')) {
-    return 'Monitorando o sistema e pronta pra agir. O que manda?';
-  }
-  if (lower.includes('que dia') || lower.includes('que horas')) {
-    return `Hoje é ${new Date().toLocaleDateString('pt-BR')}, ${new Date().toLocaleTimeString('pt-BR')}.`;
-  }
-
-  return 'Tranquilo por aqui. O que você precisa rodar?';
+  return 'Minha conexão com a IA oscilou por um segundo, Marcos. Pode mandar de novo?';
 }
 
 app.post('/chat', async (req, res) => {
