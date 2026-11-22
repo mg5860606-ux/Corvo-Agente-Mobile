@@ -347,7 +347,8 @@ async function startWhatsApp() {
     }, 4500);
 
     const querAudio = /(manda|envia|fala|grava|mande).*([áa]udio|voz)/i.test(text);
-    const isMission = !filePayload && /^(?:crie|criar|fa[çc]a|fazer|desenvolva|desenvolver|abra|abrir|navegue|navegar|baixe|baixar|download|instale|instalar|escaneie|escanear|scan|recon|audite|auditar|procure|buscar|busque|rode|rodar|execute|executar|edite|editar|programe|programar|suba|subir|monte|montar)\b/i.test(text.trim());
+    const cognitiveRouter = require('../core/corvo_cognitive_router');
+    const isMission = !filePayload && await cognitiveRouter.shouldEnterMission(text);
 
     const headers = {};
     if (GATEWAY_AUTH_TOKEN) headers['Authorization'] = `Bearer ${GATEWAY_AUTH_TOKEN}`;
