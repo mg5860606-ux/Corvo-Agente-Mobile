@@ -289,6 +289,48 @@ async function startWhatsApp() {
       return;
     }
 
+    // 5. Comando /ajuda ou /help
+    if (/^\/(?:ajuda|help|comandos)\b/i.test(cleanText)) {
+      const helpMsg = '🦅 *CORVO AGENTE MOBILE // COMANDOS*\n\n' +
+        '• `/status` - Bateria, RAM, uptime e modelo ativo\n' +
+        '• `/logs` - Últimos logs de operação do sistema\n' +
+        '• `/stop` - Interrompe qualquer missão em andamento\n' +
+        '• `/reset` - Limpa o histórico recente da conversa\n' +
+        '• `/atualizar` - Puxa atualizações do GitHub e reinicia\n' +
+        '• `/restart` - Reinicia os serviços do agente\n' +
+        '• `/ajuda` - Exibe este menu de ajuda\n\n' +
+        '_Dica: Você pode conversar normalmente ou dar ordens diretas como "crie", "pesquise", "abra"._';
+      await sock.sendMessage(jid, { text: helpMsg });
+      return;
+    }
+
+    // 6. Comando /logs ou /erros
+    if (/^\/(?:logs|log|erros)\b/i.test(cleanText)) {
+      try {
+        const logFiles = ['daemon.log', 'nohup.out'];
+        let logData = '';
+        for (const lf of logFiles) {
+          const fullLog = require('path').resolve(__dirname, '../../', lf);
+          if (fs.existsSync(fullLog)) {
+            const content = fs.readFileSync(fullLog, 'utf8').trim();
+            if (content) {
+              const lines = content.split('\n');
+              logData = lines.slice(-20).join('\n');
+              break;
+            }
+          }
+        }
+        if (!logData) {
+          await sock.sendMessage(jid, { text: '📋 *Logs do Sistema:*\nNenhum erro registrado. Tudo operando normalmente.' });
+        } else {
+          await sock.sendMessage(jid, { text: '📋 *Últimos Logs do Sistema:*\n\n```\n' + logData.slice(-1500) + '\n```' });
+        }
+      } catch (logErr) {
+        await sock.sendMessage(jid, { text: '⚠️ Falha ao ler logs: ' + logErr.message });
+      }
+      return;
+    }
+
     // Indicador de "digitando..." contínuo no WhatsApp
     await sock.sendPresenceUpdate('composing', jid);
     const typingTimer = setInterval(async () => {

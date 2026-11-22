@@ -286,7 +286,6 @@ async function startPolling() {
                 continue;
               }
             }
-            }
 
             console.log(`[TG MSG] De ${senderId} (${msg.from.first_name}) [${isMedia ? 'MÍDIA' : 'TEXTO'}]: ${text.slice(0, 80)}`);
 
@@ -360,6 +359,50 @@ async function startPolling() {
                 `• <b>Missões Ativas:</b> ${autonomousLoop.getActiveMissionsCount ? autonomousLoop.getActiveMissionsCount() : 0}`;
               const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
               await sendMessage(chatId, infoText, replyId);
+              continue;
+            }
+
+            // 5. Comando /ajuda ou /help
+            if (/^\/(?:ajuda|help|comandos)\b/i.test(cleanText)) {
+              const helpMsg = `🦅 <b>CORVO AGENTE MOBILE // COMANDOS</b>\n\n` +
+                `• <code>/status</code> - Bateria, RAM, uptime e modelo ativo\n` +
+                `• <code>/logs</code> - Últimos logs de operação do sistema\n` +
+                `• <code>/stop</code> - Interrompe qualquer missão em andamento\n` +
+                `• <code>/reset</code> - Limpa o histórico recente da conversa\n` +
+                `• <code>/atualizar</code> - Puxa atualizações do GitHub e reinicia\n` +
+                `• <code>/restart</code> - Reinicia os serviços do agente\n` +
+                `• <code>/ajuda</code> - Exibe este menu de ajuda\n\n` +
+                `<i>Dica: Você pode conversar normalmente ou dar ordens diretas como "crie", "pesquise", "abra".</i>`;
+              const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
+              await sendMessage(chatId, helpMsg, replyId);
+              continue;
+            }
+
+            // 6. Comando /logs ou /erros
+            if (/^\/(?:logs|log|erros)\b/i.test(cleanText)) {
+              const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
+              try {
+                const logFiles = ['daemon.log', 'nohup.out'];
+                let logData = '';
+                for (const lf of logFiles) {
+                  const fullLog = path.resolve(__dirname, '../../', lf);
+                  if (fs.existsSync(fullLog)) {
+                    const content = fs.readFileSync(fullLog, 'utf8').trim();
+                    if (content) {
+                      const lines = content.split('\n');
+                      logData = lines.slice(-20).join('\n');
+                      break;
+                    }
+                  }
+                }
+                if (!logData) {
+                  await sendMessage(chatId, '📋 <b>Logs do Sistema:</b>\nNenhum erro registrado. Tudo operando normalmente.', replyId);
+                } else {
+                  await sendMessage(chatId, `📋 <b>Últimos Logs do Sistema:</b>\n\n<pre>${logData.slice(-1500)}</pre>`, replyId);
+                }
+              } catch (logErr) {
+                await sendMessage(chatId, `⚠️ Falha ao ler logs: ${logErr.message}`, replyId);
+              }
               continue;
             }
 
