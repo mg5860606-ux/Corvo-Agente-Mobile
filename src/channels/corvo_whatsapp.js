@@ -9,7 +9,7 @@ function sanitizeAssistantReply(text) {
  * 🦅 CORVO AGENTE MOBILE - CLIENTE WHATSAPP INTEGRADO AO GATEWAY (COM FILA OFFLINE & ÁUDIO REALISTA)
  */
 
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, downloadMediaMessage } = require('@whiskeysockets/baileys');
+let makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, downloadMediaMessage; try { const b = require('@whiskeysockets/baileys'); makeWASocket = b.default; useMultiFileAuthState = b.useMultiFileAuthState; DisconnectReason = b.DisconnectReason; fetchLatestBaileysVersion = b.fetchLatestBaileysVersion; makeCacheableSignalKeyStore = b.makeCacheableSignalKeyStore; downloadMediaMessage = b.downloadMediaMessage; } catch (e) {}
 const readline = require('readline');
 const P = require('pino');
 const path = require('path');
@@ -73,6 +73,10 @@ async function processarFilaOffline(sock) {
 }
 
 async function startWhatsApp() {
+  if (!makeWASocket) {
+    console.error('[WHATSAPP] @whiskeysockets/baileys nao instalado. Instale com npm i @whiskeysockets/baileys para usar WhatsApp.');
+    return;
+  }
   console.clear();
   console.log('========================================');
   console.log('  🦅 CORVO AGENTE MOBILE - WHATSAPP');
@@ -245,6 +249,26 @@ async function startWhatsApp() {
       }
       await sock.sendMessage(jid, { text: `🔄 *Reiniciando*: Reiniciando serviços do Corvo Agente Mobile... voltando em 2 segundos.` });
       setTimeout(() => process.exit(0), 1000);
+      return;
+    }
+
+    
+    // 3.1 Comando /atualizar ou /update (Auto-Update pelo WhatsApp)
+    if (/^\/(?:atualizar|update|upgrade)\b/i.test(cleanText)) {
+      if (!isMarcos) {
+        await sock.sendMessage(jid, { text: '❌ Apenas o Dono (Marcos) tem autoridade para atualizar.' });
+        return;
+      }
+      await sock.sendMessage(jid, { text: '⚡ *Puxando atualização do GitHub...*' });
+      try {
+        const { execSync } = require('child_process');
+        const repoDir = path.resolve(__dirname, '../../');
+        const gitRes = execSync('git pull origin main', { cwd: repoDir, encoding: 'utf8', timeout: 35000 });
+        await sock.sendMessage(jid, { text: `✅ *Atualizado com sucesso!*\n\n` + gitRes.trim().slice(0, 300) + '\n\n🔄 *Reiniciando motores para aplicar...*' });
+        setTimeout(() => process.exit(0), 1500);
+      } catch (gitErr) {
+        await sock.sendMessage(jid, { text: `⚠️ *Erro ao atualizar:*\n` + gitErr.message.slice(0, 300) });
+      }
       return;
     }
 

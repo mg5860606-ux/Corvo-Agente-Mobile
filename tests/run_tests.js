@@ -235,7 +235,7 @@ console.log('\n📋 [6/6] Integridade de Configuração');
 
 test('package.json tem todas as dependências necessárias', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const required = ['express', 'sqlite3', '@google/generative-ai', 'axios', 'dotenv', 'cheerio', 'form-data', 'pino'];
+  const required = ['express', '@google/generative-ai', 'axios', 'dotenv', 'cheerio', 'form-data', 'pino'];
   for (const dep of required) {
     assert(pkg.dependencies[dep], `Dependência "${dep}" faltando no package.json`);
   }

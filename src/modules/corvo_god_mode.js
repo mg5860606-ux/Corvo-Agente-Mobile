@@ -91,6 +91,27 @@ const androidGodMode = {
   },
 
   /** Vibra o celular */
+  
+  /** Clica em uma coordenada exata da tela (requer ADB ou Root ou Termux X11) */
+  tocarNaTela(x, y) {
+    return runCommand(`input tap ${x} ${y} || su -c "input tap ${x} ${y}"`);
+  },
+
+  /** Rola ou arrasta a tela de (x1, y1) até (x2, y2) */
+  deslizarTela(x1, y1, x2, y2, duracao = 300) {
+    return runCommand(`input swipe ${x1} ${y1} ${x2} ${y2} ${duracao} || su -c "input swipe ${x1} ${y1} ${x2} ${y2} ${duracao}"`);
+  },
+
+  /** Digita um texto no campo focado da tela */
+  digitarTexto(texto) {
+    const textoSanitizado = String(texto).replace(/["\\]/g, '\\vibrar(milissegundos = 500) {').replace(/ /g, '%s');
+    return runCommand(`input text "${textoSanitizado}" || su -c "input text '${textoSanitizado}'"`);
+  },
+
+  /** Pressiona teclas do Android (ex: 3=Home, 4=Voltar, 66=Enter, 26=Power) */
+  pressionarTecla(keyCode) {
+    return runCommand(`input keyevent ${keyCode} || su -c "input keyevent ${keyCode}"`);
+  },
   vibrar(milissegundos = 500) {
     return runCommand(`termux-vibrate -d ${milissegundos}`);
   }

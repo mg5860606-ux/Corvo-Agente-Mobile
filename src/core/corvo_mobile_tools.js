@@ -192,6 +192,81 @@ function registerMobileTools(toolsRegistry) {
     }
   };
 
+  
+  // 12. Tocar na tela (Touch / Click em coordenadas X, Y)
+  toolsRegistry['mobile_touch_tap'] = {
+    description: 'Toca/clica em uma coordenada exata (X, Y) na tela do celular Android.',
+    parameters: {
+      type: 'object',
+      properties: {
+        x: { type: 'number', description: 'Coordenada horizontal X na tela (pixels)' },
+        y: { type: 'number', description: 'Coordenada vertical Y na tela (pixels)' }
+      },
+      required: ['x', 'y']
+    },
+    execute: async ({ x, y }) => {
+      return androidGodMode.tocarNaTela(x, y);
+    }
+  };
+
+  // 13. Deslizar / Rolar Tela (Swipe)
+  toolsRegistry['mobile_touch_swipe'] = {
+    description: 'Desliza ou rola a tela do celular do ponto (x1, y1) até (x2, y2).',
+    parameters: {
+      type: 'object',
+      properties: {
+        x1: { type: 'number', description: 'X inicial' },
+        y1: { type: 'number', description: 'Y inicial' },
+        x2: { type: 'number', description: 'X final' },
+        y2: { type: 'number', description: 'Y final' },
+        durationMs: { type: 'number', description: 'Duração em ms', default: 300 }
+      },
+      required: ['x1', 'y1', 'x2', 'y2']
+    },
+    execute: async ({ x1, y1, x2, y2, durationMs = 300 }) => {
+      return androidGodMode.deslizarTela(x1, y1, x2, y2, durationMs);
+    }
+  };
+
+  // 14. Digitar texto na tela
+  toolsRegistry['mobile_type_text'] = {
+    description: 'Digita um texto no campo que estiver atualmente em foco na tela do Android.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Texto a ser digitado' }
+      },
+      required: ['text']
+    },
+    execute: async ({ text }) => {
+      return androidGodMode.digitarTexto(text);
+    }
+  };
+
+  // 15. Tecla física / virtual do Android
+  toolsRegistry['mobile_press_key'] = {
+    description: 'Pressiona botão do Android (3=HOME, 4=VOLTAR, 66=ENTER, 26=TELA_LIGAR_DESLIGAR, 24=VOL_UP, 25=VOL_DOWN).',
+    parameters: {
+      type: 'object',
+      properties: {
+        keyCode: { type: 'number', description: 'Código do Keyevent do Android (ex: 4 para Voltar, 3 para Home)' }
+      },
+      required: ['keyCode']
+    },
+    execute: async ({ keyCode }) => {
+      return androidGodMode.pressionarTecla(keyCode);
+    }
+  };
+
+  // 16. Tirar Screenshot da tela do Android
+  toolsRegistry['mobile_take_screenshot'] = {
+    description: 'Tira uma captura de tela real (screenshot) do display do Android.',
+    parameters: { type: 'object', properties: {} },
+    execute: async () => {
+      return androidGodMode.tirarPrint();
+    }
+  };
+
   console.log('[TOOL FORGE] Ferramentas nativas do Android registradas com sucesso!');
 }
 

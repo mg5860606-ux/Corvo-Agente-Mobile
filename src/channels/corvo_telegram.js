@@ -391,7 +391,9 @@ async function startPolling() {
 
                 // Apaga a mensagem de estado para manter o chat 100% limpo
                 if (statusMsg && statusMsg.message_id) {
-                  await deleteMessage(chatId, statusMsg.message_id);
+                  const tagIcon = missionRes.success ? '✅' : '🛑';
+                  const desc = missionRes.success ? 'Missão concluída com sucesso!' : (missionRes.error || 'Missão interrompida.');
+                  await editMessage(chatId, statusMsg.message_id, `<b>${tagIcon} Status:</b> <i>${desc}</i>`);
                 }
 
                 const finalReport = missionRes.report || (missionRes.success ? 'Missão concluída com sucesso!' : `Missão encerrada: ${missionRes.error}`);
