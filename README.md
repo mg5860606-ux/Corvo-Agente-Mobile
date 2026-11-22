@@ -96,6 +96,12 @@ termux-setup-storage
 pkg update -y && pkg install termux-api termux-tools -y
 ```
 
+> ⚠️ **DICA DE OURO: Se travar na tela de "No mirror or mirror group selected":**
+> 1. Rode no terminal: `termux-change-repo`
+> 2. Pressione **Enter** na primeira opção e escolha um mirror (ex: *Mirrors by Grimler* ou *A1z.uk*).
+> 3. Em seguida, rode novamente: `pkg install termux-api -y`.
+> 4. Teste se a bateria já está lendo rodando: `termux-battery-status`. Se mostrar o JSON com a porcentagem, está pronto!
+
 ---
 
 ### 3️⃣ Instalar o Aplicativo Termux:API no Android
@@ -126,7 +132,7 @@ termux-wake-lock
 ## 🎮 Comandos Disponíveis no Telegram e WhatsApp
 
 Você pode mandar estes comandos soltos no privado ou em grupos (sem precisar marcar com `@`):
-- `/status` — Mostra bateria real, memória RAM livre, uptime e modelo ativo (`gemini-3.5-flash`).
+- `/status` — Mostra bateria real, memória RAM livre, uptime e modelo ativo (`gemini-3.1-flash-lite`).
 - `/ajuda` — Exibe a lista completa de comandos rápidos e orientações.
 - `/logs` — Mostra os últimos registros de operação e diagnósticos do sistema.
 - `/atualizar` — Puxa as novidades mais recentes do GitHub e reinicia os serviços na hora.
