@@ -451,7 +451,7 @@ async function startPolling() {
                   const voiceEngine = require('../core/corvo_voice');
                   const vRes = await voiceEngine.gerarAudio(finalReport.slice(0, 350));
                   if (vRes.success) {
-                    await sendVoice(chatId, vRes.filePath, `🦅 Corvo Agente`);
+                    await sendVoice(chatId, vRes.filePath);
                   } else {
                     if (finalReport) await sendMessage(chatId, finalReport, replyId);
                   }
@@ -483,7 +483,7 @@ async function startPolling() {
                   message: text,
                   file: filePayload,
                   chatId: String(chatId),
-                  sender: isDono ? 'Marcos (DONO)' : (msg.from.first_name || 'Usuário'),
+                  sender: (brain.getUserProfile().name ? brain.getUserProfile().name + (isDono ? ' (DONO)' : '') : (msg.from.first_name || 'Usuário')),
                   isDono: isDono
                 }, { headers });
 
@@ -492,7 +492,7 @@ async function startPolling() {
                 if (chatRes.data && chatRes.data.reply) {
                   if (querAudio && chatRes.data.audioUrl) {
                     const audioFile = path.resolve(__dirname, '../../data/audio', path.basename(chatRes.data.audioUrl));
-                    await sendVoice(chatId, audioFile, `🦅 Corvo Agente`);
+                    await sendVoice(chatId, audioFile);
                   } else {
                     const replyId = (isDono && chatType === 'private') ? null : msg.message_id;
                     const rep = sanitizeAssistantReply(chatRes.data.reply);

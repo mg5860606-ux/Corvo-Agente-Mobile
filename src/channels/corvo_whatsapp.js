@@ -379,9 +379,6 @@ async function startWhatsApp() {
 
         const finalReport = missionRes.report || (missionRes.success ? 'Missão concluída com sucesso!' : `Missão encerrada: ${missionRes.error}`);
 
-        // Envia resposta solta (sem reply) no WhatsApp
-        await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${finalReport}` });
-
         // Se pediu áudio, gera a voz ultra-realista e envia como mensagem de voz nativa (PTT)
         if (querAudio) {
           try {
@@ -393,10 +390,16 @@ async function startWhatsApp() {
                 mimetype: 'audio/mp4',
                 ptt: true
               });
+            } else {
+              await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${finalReport}` });
             }
           } catch (vErr) {
             console.error('[VOICE SEND ERROR]', vErr.message);
+            await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${finalReport}` });
           }
+        } else {
+          // Envia resposta em texto no WhatsApp se não foi pedido áudio
+          await sock.sendMessage(jid, { text: `🦅 *CORVO AGENTE MOBILE*:\n\n${finalReport}` });
         }
 
         // Se houver screenshot capturado durante a missão, envia a foto
@@ -421,7 +424,7 @@ async function startWhatsApp() {
         const chatRes = await axios.post(`${GATEWAY_URL}/chat`, {
           message: text,
           file: filePayload,
-          sender: isMarcos ? 'Marcos (DONO)' : (m.pushName || 'Usuário'),
+          sender: (brain.getUserProfile().name ? brain.getUserProfile().name + (isMarcos ? ' (DONO)' : '') : (m.pushName || 'Usuário')),
           isDono: isMarcos
         }, { headers, timeout: 60000 });
 
@@ -430,11 +433,7 @@ async function startWhatsApp() {
         if (chatRes.data && chatRes.data.reply) {
           const resposta = chatRes.data.reply;
 
-          // Envia mensagem solta (sem reply) no WhatsApp
-          const rep = sanitizeAssistantReply(resposta);
-          if (rep) await sock.sendMessage(jid, { text: rep });
-
-          // Se pediu áudio ou se o gateway gerou áudio
+          // Se pediu áudio ou se o gateway gerou áudio: manda SOMENTE o áudio
           if (querAudio || chatRes.data.audioUrl) {
             const audioFileName = path.basename(chatRes.data.audioUrl || '');
             const audioFile = path.resolve(__dirname, '../../data/audio', audioFileName);
@@ -443,9 +442,17 @@ async function startWhatsApp() {
               await sock.sendMessage(jid, {
                 audio: audioBuffer,
                 mimetype: 'audio/mp4',
-                ptt: true // Envia como áudio gravado nativo no WhatsApp
+                ptt: true // Envia como áudio gravado nativo no WhatsApp sem legenda
               });
+            } else {
+              // Se o arquivo de áudio falhar, aí sim envia texto como fallback
+              const rep = sanitizeAssistantReply(resposta);
+              if (rep) await sock.sendMessage(jid, { text: rep });
             }
+          } else {
+            // Envia mensagem de texto normal
+            const rep = sanitizeAssistantReply(resposta);
+            if (rep) await sock.sendMessage(jid, { text: rep });
           }
         }
       }

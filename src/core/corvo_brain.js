@@ -11,6 +11,16 @@ const os = require('os');
 const BRAIN_DIR = path.resolve(__dirname, '../../brain');
 if (!fs.existsSync(BRAIN_DIR)) fs.mkdirSync(BRAIN_DIR, { recursive: true });
 
+const PROFILE_FILE = path.join(BRAIN_DIR, 'user_profile.json');
+
+function getUserProfile() {
+  return loadJson(PROFILE_FILE, {});
+}
+
+function saveUserProfile(data) {
+  saveJson(PROFILE_FILE, data);
+}
+
 const EPISODIC_FILE = path.join(BRAIN_DIR, 'episodic_memory.json');
 const PROVEN_SOLUTIONS_PATH = path.join(BRAIN_DIR, 'proven_solutions.json');
 const MOOD_STATE_PATH = path.join(BRAIN_DIR, 'human_mood_state.json');
@@ -63,6 +73,24 @@ const POSITIVE_PATTERNS = /\b(boa|acertou|perfeito|ficou foda|ficou top|mandou b
 const NEGATIVE_PATTERNS = /\b(t[aá] errado|n[aã]o funcionou|fez merda|cagou|deu erro|conserta|corrija|t[aá] quebrado|falhou|ruim|bosta|lixo)\b/i;
 
 const brain = {
+  /**
+   * Atualiza e recupera perfil persistente do dono / usuário
+   */
+  getUserProfile() {
+    return loadJson(PROFILE_FILE, {});
+  },
+
+  setUserName(name, isDono = false) {
+    if (!name) return;
+    const profile = loadJson(PROFILE_FILE, {});
+    profile.name = name.trim();
+    if (isDono) profile.isDono = true;
+    profile.updated_at = new Date().toISOString();
+    saveJson(PROFILE_FILE, profile);
+    this.remember('nome_usuario', `O nome do dono/usuário é ${name.trim()}`, 10, 'profile');
+    return profile;
+  },
+
   /**
    * Guarda um novo fato ou memória episódica com auto-poda para mobile
    */
