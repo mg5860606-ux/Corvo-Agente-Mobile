@@ -167,6 +167,28 @@ async function startPolling() {
   console.log(`[TELEGRAM] Iniciando polling com bot token: ${BOT_TOKEN.slice(0, 10)}...`);
   isRunning = true;
 
+  // Notifica no chat que religou com a nova versão
+  try {
+    const stateFile = path.resolve(__dirname, '../../data', 'update_notify.json');
+    if (fs.existsSync(stateFile)) {
+      const raw = fs.readFileSync(stateFile, 'utf8');
+      const info = JSON.parse(raw);
+      fs.unlinkSync(stateFile);
+      if (info && info.chatId && (Date.now() - info.time) < 180000) {
+        await sendMessage(
+          info.chatId,
+          `🦅 <b>SISTEMA REINICIADO & ATUALIZADO!</b>\n\n` +
+          `• Motores recarregados com sucesso na versão mais recente.\n` +
+          `• Todos os módulos e sensores prontos.\n\n` +
+          `<i>Tô pronta. O que manda?</i>`,
+          info.replyId
+        );
+      }
+    }
+  } catch (e) {
+    console.warn('[TG NOTIFY WARN] Falha ao enviar aviso de religamento:', e.message);
+  }
+
   while (isRunning) {
     try {
       const res = await axios.get(`${API_URL}/getUpdates`, {
@@ -333,6 +355,17 @@ async function startPolling() {
               try {
                 const { execSync } = require('child_process');
                 const repoDir = path.resolve(__dirname, '../../');
+                // Salva flag de restart antes de puxar e reiniciar
+                try {
+                  const stateFile = path.resolve(repoDir, 'data', 'update_notify.json');
+                  fs.writeFileSync(stateFile, JSON.stringify({
+                    channel: 'telegram',
+                    chatId: String(chatId),
+                    replyId: replyId,
+                    time: Date.now()
+                  }), 'utf8');
+                } catch (e) {}
+
                 // Descarta alteracoes locais em arquivos autogerados como package-lock.json para nunca dar conflito
                 try { execSync('git checkout -- package-lock.json 2>/dev/null || true', { cwd: repoDir, timeout: 5000 }); } catch (e) {}
                 const gitRes = execSync('git fetch origin main && git reset --hard origin/main', { cwd: repoDir, encoding: 'utf8', timeout: 35000 });
